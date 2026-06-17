@@ -56,7 +56,7 @@ struct GroqClient {
 
         let payload: [String: Any] = [
             "model": config.cleanupModel,
-            "temperature": 0.2,
+            "temperature": 0.1,
             "messages": [
                 ["role": "system", "content": config.systemPrompt],
                 ["role": "user", "content": transcript]
