@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let recorder = AudioRecorder()
     private let hotkey = HotkeyManager()
     private let overlay = RecordingOverlay()
+    private let settings = SettingsWindowController()
     private var config = Config.load()
     private var isProcessing = false
 
@@ -28,6 +29,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !config.hasKey { showMissingKeyAlert() }
     }
 
+    /// Reopening the app (from Raycast, Spotlight or the Dock) has no main window to restore,
+    /// so we surface the settings window instead.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        openSettings()
+        return true
+    }
+
     // MARK: - Menu bar
 
     private func setupStatusItem() {
@@ -39,8 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(disabled: "Mantén ⌥ (Option derecho) para dictar")
         menu.addItem(.separator())
-        menu.addItem(action: "Abrir configuración…", #selector(openConfig), target: self, key: ",")
-        menu.addItem(action: "Recargar configuración", #selector(reloadConfig), target: self, key: "r")
+        menu.addItem(action: "Configuración…", #selector(openSettings), target: self, key: ",")
         menu.addItem(.separator())
         menu.addItem(action: "Salir", #selector(NSApplication.terminate(_:)), target: nil, key: "q")
         statusItem.menu = menu
@@ -139,28 +146,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Config actions
 
-    @objc private func openConfig() {
-        Config.writeTemplateIfMissing()
-        NSWorkspace.shared.open(Config.configURL)
-    }
-
-    @objc private func reloadConfig() {
-        config = Config.load()
-        if !config.hasKey { showMissingKeyAlert() }
+    @objc private func openSettings() {
+        settings.show(config: config) { [weak self] updated in
+            guard let self else { return }
+            do {
+                try updated.save()
+                self.config = updated
+            } catch {
+                NSLog("[Susurro] no se pudo guardar la configuración: \(error)")
+            }
+        }
     }
 
     private func showMissingKeyAlert() {
         let alert = NSAlert()
         alert.messageText = "Falta la API key de Groq"
-        alert.informativeText = """
-        Añade tu clave de Groq en:
-        \(Config.configURL.path)
-
-        Después usa “Recargar configuración” en el menú.
-        """
+        alert.informativeText = "Abre la configuración y pega tu clave de Groq para empezar a dictar."
         alert.addButton(withTitle: "Abrir configuración")
         alert.addButton(withTitle: "Más tarde")
-        if alert.runModal() == .alertFirstButtonReturn { openConfig() }
+        if alert.runModal() == .alertFirstButtonReturn { openSettings() }
     }
 }
 

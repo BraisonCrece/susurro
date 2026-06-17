@@ -29,7 +29,17 @@ else
 fi
 codesign --force --sign "$SIGN_ID" --identifier "$BUNDLE_ID" "$DEST"
 
+# Install to /Applications so Spotlight/Raycast can find it. Done automatically once it lives
+# there, or on first run with --install. The signature is preserved by the copy, and TCC keys
+# on the (stable) signature rather than the path, so accessibility grants carry over.
+INSTALLED="/Applications/$APP.app"
+if [ "${1:-}" = "--install" ] || [ -d "$INSTALLED" ]; then
+    echo "==> Installing to $INSTALLED"
+    rm -rf "$INSTALLED"
+    cp -R "$DEST" "$INSTALLED"
+fi
+
 echo
 echo "Done: $DEST"
 echo "Run it:        open $DEST"
-echo "Install it:    cp -R $DEST /Applications/"
+echo "Install it:    ./build-app.sh --install   (copies to /Applications)"

@@ -1,0 +1,102 @@
+import AppKit
+import SwiftUI
+
+struct SettingsView: View {
+    private let initial: Config
+    private let onSave: (Config) -> Void
+    private let onCancel: () -> Void
+
+    @State private var apiKey: String
+    @State private var language: String
+    @State private var transcriptionModel: String
+    @State private var cleanupModel: String
+
+    init(initial: Config, onSave: @escaping (Config) -> Void, onCancel: @escaping () -> Void) {
+        self.initial = initial
+        self.onSave = onSave
+        self.onCancel = onCancel
+        _apiKey = State(initialValue: initial.hasKey ? initial.groqApiKey : "")
+        _language = State(initialValue: initial.language ?? "")
+        _transcriptionModel = State(initialValue: initial.transcriptionModel)
+        _cleanupModel = State(initialValue: initial.cleanupModel)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Configuración de Susurro")
+                .font(.headline)
+
+            Form {
+                SecureField("API key de Groq", text: $apiKey)
+                Picker("Idioma", selection: $language) {
+                    Text("Detección automática").tag("")
+                    Text("Español").tag("es")
+                    Text("English").tag("en")
+                }
+                TextField("Modelo de transcripción", text: $transcriptionModel)
+                TextField("Modelo de refinado", text: $cleanupModel)
+            }
+
+            HStack {
+                Link("Conseguir una API key", destination: URL(string: "https://console.groq.com/keys")!)
+                    .font(.caption)
+                Spacer()
+                Button("Cancelar", action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+                Button("Guardar", action: save)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(apiKey.isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 460)
+    }
+
+    private func save() {
+        var config = initial
+        config.groqApiKey = apiKey
+        config.language = language.isEmpty ? nil : language
+        config.transcriptionModel = transcriptionModel
+        config.cleanupModel = cleanupModel
+        onSave(config)
+    }
+}
+
+/// Hosts the SwiftUI settings form in a regular window. The app is normally an accessory
+/// (menu-bar only), so it switches to a regular activation policy while the window is open
+/// to take keyboard focus, and back to accessory when it closes.
+final class SettingsWindowController: NSObject, NSWindowDelegate {
+    private var window: NSWindow?
+
+    func show(config: Config, onSave: @escaping (Config) -> Void) {
+        if let window {
+            activate(window)
+            return
+        }
+
+        let view = SettingsView(
+            initial: config,
+            onSave: { [weak self] updated in onSave(updated); self?.window?.close() },
+            onCancel: { [weak self] in self?.window?.close() }
+        )
+        let window = NSWindow(contentViewController: NSHostingController(rootView: view))
+        window.title = "Configuración de Susurro"
+        window.styleMask = [.titled, .closable]
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        window.center()
+        self.window = window
+        activate(window)
+    }
+
+    private func activate(_ window: NSWindow) {
+        NSApp.setActivationPolicy(.regular)
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        window = nil
+        NSApp.setActivationPolicy(.accessory)
+    }
+}

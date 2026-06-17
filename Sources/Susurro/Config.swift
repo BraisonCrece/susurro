@@ -41,6 +41,19 @@ struct Config {
     Output ONLY the resulting text, with no preamble.
     """
 
+    func save() throws {
+        var dict: [String: Any] = [
+            "groqApiKey": groqApiKey,
+            "transcriptionModel": transcriptionModel,
+            "cleanupModel": cleanupModel
+        ]
+        if let language, !language.isEmpty { dict["language"] = language }
+        if systemPrompt != Self.defaultSystemPrompt { dict["systemPrompt"] = systemPrompt }
+        let data = try JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys])
+        try FileManager.default.createDirectory(at: Self.configDir, withIntermediateDirectories: true)
+        try data.write(to: Self.configURL)
+    }
+
     static func load() -> Config {
         var json: [String: Any] = [:]
         if let data = try? Data(contentsOf: configURL),
