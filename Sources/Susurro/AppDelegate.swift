@@ -12,6 +12,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var config = Config.load()
     private var isProcessing = false
 
+    private lazy var idleIcon = Self.barsImage(color: .black, template: true)
+    private lazy var recordingIcon = Self.barsImage(color: .systemRed, template: false)
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         Config.writeTemplateIfMissing()
         setupStatusItem()
@@ -45,19 +48,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setIcon(_ state: State) {
         guard let button = statusItem.button else { return }
-        let symbol: String
+        button.title = ""
         switch state {
-        case .idle: symbol = "mic"
-        case .recording: symbol = "mic.fill"
-        case .processing: symbol = "ellipsis"
+        case .idle, .processing: button.image = idleIcon
+        case .recording: button.image = recordingIcon
         }
-        if let image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Susurro") {
-            button.image = image
-            button.title = ""
-        } else {
-            button.image = nil
-            button.title = "S"
+    }
+
+    /// The Susurro equalizer motif rendered as a menu-bar glyph. As a template image it adapts
+    /// to a light or dark menu bar; the red, non-template variant signals active recording.
+    private static func barsImage(color: NSColor, template: Bool) -> NSImage {
+        let size = NSSize(width: 18, height: 18)
+        let image = NSImage(size: size, flipped: false) { rect in
+            let heights: [CGFloat] = [0.34, 0.60, 0.90, 0.60, 0.34]
+            let barWidth: CGFloat = 2.2
+            let gap: CGFloat = 2.0
+            let totalWidth = CGFloat(heights.count) * barWidth + CGFloat(heights.count - 1) * gap
+            let startX = (rect.width - totalWidth) / 2
+            let maxBar = rect.height * 0.82
+            let midY = rect.height / 2
+            color.setFill()
+            for (index, fraction) in heights.enumerated() {
+                let height = maxBar * fraction
+                let x = startX + CGFloat(index) * (barWidth + gap)
+                let bar = NSRect(x: x, y: midY - height / 2, width: barWidth, height: height)
+                NSBezierPath(roundedRect: bar, xRadius: barWidth / 2, yRadius: barWidth / 2).fill()
+            }
+            return true
         }
+        image.isTemplate = template
+        return image
     }
 
     // MARK: - Permissions
