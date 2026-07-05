@@ -22,11 +22,12 @@ struct DictationPipeline {
         defer { recording.removeFile() }
         do {
             let client = GroqClient(config: config)
-            let raw = try await client.transcribe(fileURL: recording.fileURL)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let transcription = try await client.transcribe(fileURL: recording.fileURL)
+            let raw = transcription.text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !raw.isEmpty else { return .empty }
 
-            let clean = try await client.cleanup(transcript: raw, context: context, technical: technical)
+            let clean = try await client.cleanup(transcript: raw, context: context, technical: technical,
+                                                 detectedLanguage: transcription.language)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard !clean.isEmpty else { return .empty }
 

@@ -8,7 +8,11 @@ struct Config {
     var groqApiKey: String
     var transcriptionModel: String
     var cleanupModel: String
-    var language: String?
+    /// ISO codes of the languages the user dictates in, ordered by preference. Empty means
+    /// unconstrained auto-detection. With several, the transcriber auto-detects and the
+    /// refiner normalizes any out-of-list misdetection (Portuguese-flavored Galician being
+    /// the canonical case) into the closest configured language.
+    var languages: [String]
     var systemPrompt: String
     /// Read the text before the caret (via Accessibility) and send it to the refiner so
     /// burst dictations continue the sentence naturally. Off ⇒ nothing but the audio ever
@@ -90,7 +94,9 @@ struct Config {
         var groqApiKey: String?
         var transcriptionModel: String?
         var cleanupModel: String?
+        /// Legacy single-language key, read for migration and no longer written.
         var language: String?
+        var languages: [String]?
         var systemPrompt: String?
         var useCursorContext: Bool?
         var dictionary: [String]?
@@ -102,7 +108,8 @@ struct Config {
             groqApiKey: groqApiKey,
             transcriptionModel: transcriptionModel,
             cleanupModel: cleanupModel,
-            language: language.flatMap { $0.isEmpty ? nil : $0 },
+            language: nil,
+            languages: languages.isEmpty ? nil : languages,
             systemPrompt: systemPrompt == Self.defaultSystemPrompt ? nil : systemPrompt,
             useCursorContext: useCursorContext ? nil : false,
             dictionary: dictionary.isEmpty ? nil : dictionary,
@@ -116,11 +123,12 @@ struct Config {
         let stored = (try? Data(contentsOf: configURL))
             .flatMap { try? JSONDecoder().decode(Stored.self, from: $0) }
             ?? Stored()
+        let legacyLanguage = stored.language.flatMap { $0.isEmpty ? nil : [$0] }
         return Config(
             groqApiKey: stored.groqApiKey ?? ProcessInfo.processInfo.environment["GROQ_API_KEY"] ?? "",
             transcriptionModel: stored.transcriptionModel ?? defaultTranscriptionModel,
             cleanupModel: stored.cleanupModel ?? defaultCleanupModel,
-            language: stored.language,
+            languages: stored.languages ?? legacyLanguage ?? [],
             systemPrompt: stored.systemPrompt ?? defaultSystemPrompt,
             useCursorContext: stored.useCursorContext ?? true,
             dictionary: stored.dictionary ?? [],
@@ -135,8 +143,7 @@ struct Config {
             groqApiKey: placeholderKey,
             transcriptionModel: defaultTranscriptionModel,
             cleanupModel: defaultCleanupModel,
-            language: "es",
-            systemPrompt: nil
+            languages: ["es"]
         )
         try? encoder.encode(template).write(to: configURL)
     }

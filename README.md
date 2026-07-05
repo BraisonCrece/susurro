@@ -59,6 +59,11 @@ actualizaciones…** in the menu.
 - **Dictated punctuation.** "coma", "punto", "question mark"… become the marks themselves.
 - **Identifier casing.** "user id en camel case" → `userId`, "max retries en snake case en
   mayúsculas" → `MAX_RETRIES`.
+- **Your languages, only yours.** Configure the languages you dictate in, ordered by
+  preference (e.g. Spanish, Galician, English). Output only ever comes out in those:
+  close-language misdetections — Galician rendered with Portuguese spellings is the
+  classic — are normalized automatically, while mixing your languages in one dictation
+  is preserved.
 - **Personal dictionary.** Your jargon ("Whitebox, Sorbet, Temporal…") biases the
   transcription model itself and the refiner enforces the exact spelling. Edit it in
   settings.
@@ -79,15 +84,15 @@ launch), which you can also edit by hand — restart the app to pick up changes:
   "groqApiKey": "gsk_...",
   "transcriptionModel": "whisper-large-v3-turbo",
   "cleanupModel": "llama-3.3-70b-versatile",
-  "language": "es"
+  "languages": ["es", "gl", "en"]
 }
 ```
 
-Optional keys: `systemPrompt` to customize the cleanup rules (JSON only), `language` (ISO
-code, e.g. `es` / `en`) to pin the transcription language, `dictionary` (array of terms for
-the personal dictionary), `useCursorContext` (default `true`), and `technicalApps` (array
-of bundle IDs that trigger technical mode). The `GROQ_API_KEY` environment variable is
-also honored.
+Optional keys: `systemPrompt` to customize the cleanup rules (JSON only), `languages` (ISO
+codes in order of preference; empty = pure auto-detection; the legacy `language` key is
+still read), `dictionary` (array of terms for the personal dictionary), `useCursorContext`
+(default `true`), and `technicalApps` (array of bundle IDs that trigger technical mode).
+The `GROQ_API_KEY` environment variable is also honored.
 
 ## Permissions
 

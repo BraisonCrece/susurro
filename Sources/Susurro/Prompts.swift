@@ -3,10 +3,14 @@ import Foundation
 /// Assembles the refiner's system prompt: the (possibly user-customized) base rules plus
 /// the dynamic per-dictation blocks.
 enum PromptBuilder {
-    static func systemPrompt(config: Config, context: String?, technical: Bool) -> String {
+    static func systemPrompt(config: Config, context: String?, technical: Bool,
+                             detectedLanguage: String? = nil) -> String {
         var sections = [config.systemPrompt]
         if technical {
             sections.append(technicalBlock)
+        }
+        if !config.languages.isEmpty {
+            sections.append(languagesBlock(config.languages, detected: detectedLanguage))
         }
         if !config.dictionary.isEmpty {
             sections.append(vocabularyBlock(config.dictionary))
@@ -15,6 +19,27 @@ enum PromptBuilder {
             sections.append(contextBlock(context))
         }
         return sections.joined(separator: "\n\n")
+    }
+
+    private static func languagesBlock(_ codes: [String], detected: String?) -> String {
+        let names = codes.map(DictationLanguage.englishName(for:)).joined(separator: ", ")
+        var block = """
+        The speaker only ever dictates in these languages: \(names). Words in ANY of them \
+        are always correct as spoken — mixing them inside one dictation is normal, and a \
+        word must NEVER be translated into a sibling configured language ("mañá pola tarde" \
+        inside a Spanish sentence stays "mañá pola tarde"). The transcriber does sometimes \
+        emit spellings from a language OUTSIDE the list — most often Galician rendered with \
+        Portuguese orthography; rewrite only those into the closest configured language, \
+        fixing orthography alone (Portuguese-style "tínhamos, uma" → Galician "tiñamos, \
+        unha"), never dropping or reordering words.
+        """
+        if let detected, !detected.isEmpty {
+            block += """
+            \nThe transcriber's own label for this transcript was "\(detected)" — labels are \
+            unreliable for close languages; trust the words themselves.
+            """
+        }
+        return block
     }
 
     private static let technicalBlock = """

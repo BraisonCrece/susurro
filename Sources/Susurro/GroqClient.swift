@@ -20,7 +20,13 @@ struct GroqClient {
     private let base = "https://api.groq.com/openai/v1"
     private let session = URLSession.shared
 
-    func transcribe(fileURL: URL) async throws -> String {
+    struct Transcription {
+        let text: String
+        /// Language Whisper reports for the transcript, as an English name ("Spanish").
+        let language: String?
+    }
+
+    func transcribe(fileURL: URL) async throws -> Transcription {
         let boundary = "Boundary-\(UUID().uuidString)"
         var request = makeRequest(path: "audio/transcriptions",
                                   contentType: "multipart/form-data; boundary=\(boundary)")
@@ -33,9 +39,11 @@ struct GroqClient {
         body.append(audio)
         body.appendString("\r\n")
         appendField("model", config.transcriptionModel, to: &body, boundary: boundary)
-        appendField("response_format", "text", to: &body, boundary: boundary)
-        if let language = config.language, !language.isEmpty {
-            appendField("language", language, to: &body, boundary: boundary)
+        // verbose_json carries the detected language, which the refiner needs to normalize
+        // misdetections when several languages are configured.
+        appendField("response_format", "verbose_json", to: &body, boundary: boundary)
+        if config.languages.count == 1, let only = config.languages.first {
+            appendField("language", only, to: &body, boundary: boundary)
         }
         if !config.dictionary.isEmpty {
             // Whisper biases its decoding toward vocabulary present in the prompt field,
@@ -53,18 +61,22 @@ struct GroqClient {
         request.httpBody = body
 
         let data = try await send(request)
-        guard let text = String(data: data, encoding: .utf8) else { throw ClientError.badResponse }
-        return text
+        guard let response = try? JSONDecoder().decode(TranscriptionResponse.self, from: data)
+        else { throw ClientError.badResponse }
+        return Transcription(text: response.text, language: response.language)
     }
 
-    func cleanup(transcript: String, context: String?, technical: Bool) async throws -> String {
+    func cleanup(transcript: String, context: String?, technical: Bool,
+                 detectedLanguage: String?) async throws -> String {
         var request = makeRequest(path: "chat/completions", contentType: "application/json")
         request.httpBody = try JSONEncoder().encode(ChatRequest(
             model: config.cleanupModel,
             temperature: 0.1,
             messages: [
                 .init(role: "system",
-                      content: PromptBuilder.systemPrompt(config: config, context: context, technical: technical)),
+                      content: PromptBuilder.systemPrompt(config: config, context: context,
+                                                          technical: technical,
+                                                          detectedLanguage: detectedLanguage)),
                 .init(role: "user", content: transcript)
             ]
         ))
@@ -77,6 +89,11 @@ struct GroqClient {
     }
 
     // MARK: - Wire types
+
+    private struct TranscriptionResponse: Decodable {
+        let text: String
+        let language: String?
+    }
 
     private struct ChatRequest: Encodable {
         struct Message: Encodable {

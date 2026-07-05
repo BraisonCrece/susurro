@@ -10,7 +10,7 @@ struct SettingsView: View {
 
     @State private var tab: Tab
     @State private var apiKey: String
-    @State private var language: String
+    @State private var languages: [String]
     @State private var transcriptionModel: String
     @State private var cleanupModel: String
     @State private var useCursorContext: Bool
@@ -27,7 +27,7 @@ struct SettingsView: View {
         self.onCancel = onCancel
         _tab = State(initialValue: initialTab)
         _apiKey = State(initialValue: initial.hasKey ? initial.groqApiKey : "")
-        _language = State(initialValue: initial.language ?? "")
+        _languages = State(initialValue: initial.languages)
         _transcriptionModel = State(initialValue: initial.transcriptionModel)
         _cleanupModel = State(initialValue: initial.cleanupModel)
         _useCursorContext = State(initialValue: initial.useCursorContext)
@@ -63,7 +63,7 @@ struct SettingsView: View {
             }
             .padding(14)
         }
-        .frame(width: 540, height: 440)
+        .frame(width: 540, height: 560)
     }
 
     // MARK: - Tabs
@@ -74,12 +74,47 @@ struct SettingsView: View {
                 SecureField("API key de Groq", text: $apiKey)
             }
             Section {
-                Picker("Idioma del dictado", selection: $language) {
-                    Text("Detección automática").tag("")
-                    Text("Español").tag("es")
-                    Text("Galego").tag("gl")
-                    Text("English").tag("en")
+                ForEach(Array(languages.enumerated()), id: \.element) { index, code in
+                    HStack {
+                        Text("\(index + 1).")
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
+                        Text(DictationLanguage.name(for: code))
+                        Spacer()
+                        Button {
+                            languages.removeAll { $0 == code }
+                        } label: {
+                            Image(systemName: "minus.circle")
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.secondary)
+                        .help("Quitar idioma")
+                    }
                 }
+                .onMove { from, to in
+                    languages.move(fromOffsets: from, toOffset: to)
+                }
+
+                if languages.isEmpty {
+                    Text("Sin idiomas: detección automática pura.")
+                        .foregroundColor(.secondary)
+                }
+                let available = DictationLanguage.catalog.filter { !languages.contains($0.code) }
+                if !available.isEmpty {
+                    Menu("Añadir idioma…") {
+                        ForEach(available) { language in
+                            Button(language.name) { languages.append(language.code) }
+                        }
+                    }
+                }
+            } header: {
+                Text("Idiomas del dictado")
+            } footer: {
+                Text("En orden de preferencia — arrastra para reordenar. Lo dictado solo saldrá en estos idiomas; las confusiones (gallego escrito a la portuguesa) se corrigen solas.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            Section {
                 Toggle("Contexto del cursor", isOn: $useCursorContext)
             } footer: {
                 Text("Con el contexto activo, Susurro lee el texto junto al cursor para continuar frases con el espaciado y las mayúsculas correctos.")
@@ -163,7 +198,7 @@ struct SettingsView: View {
     private func save() {
         var config = initial
         config.groqApiKey = trimmedKey
-        config.language = language.isEmpty ? nil : language
+        config.languages = languages
         config.transcriptionModel = transcriptionModel
         config.cleanupModel = cleanupModel
         config.useCursorContext = useCursorContext
