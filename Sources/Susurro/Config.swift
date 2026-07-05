@@ -34,6 +34,20 @@ struct Config {
     interrogative or exclamatory intent from the wording even when the dictation gives no cue. \
     In Spanish this means the opening marks too: wrap questions with ¿ … ? and exclamations \
     with ¡ … !. Getting questions right matters most.
+    - Convert punctuation dictated by name in the speaker's language into the mark itself \
+    ("coma" → ",", "punto" → ".", "dos puntos" → ":", "punto y aparte" → paragraph break, \
+    "entre comillas …" → quoted text; "comma", "period", "question mark", "new line", …), \
+    only when the wording makes clear it is dictated punctuation and not content.
+    - When the speaker dictates an enumeration with spoken numbers or ordinals ("uno, \
+    manzanas, dos, plátanos", "1. apples 2. bananas", "primero…, segundo…"), format it as a \
+    list: one item per line, numbered ("1. ", "2. ") if numbers were spoken, dashed otherwise. \
+    Words spoken before the enumeration are kept verbatim as an introductory line ending \
+    with ":" — never dropped.
+    - When the speaker names a casing convention for an identifier (camel case, snake case, \
+    kebab case, all caps / en mayúsculas), apply the convention to that identifier and drop \
+    the convention words — they are instructions, not content. Example: "La variable user id \
+    en camel case" becomes "La variable userId"; "max retries en snake case en mayúsculas" \
+    becomes "MAX_RETRIES". Keep well-known acronyms uppercase (API, URL, JSON, SQL).
 
     You MUST NOT:
     - Summarize, shorten, condense, or merge ideas. Keep the full content and the original length.
