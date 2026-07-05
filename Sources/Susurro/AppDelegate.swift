@@ -185,7 +185,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if !raw.isEmpty {
                     let clean = try await client.cleanup(transcript: raw, context: context, technical: technical)
                         .trimmingCharacters(in: .whitespacesAndNewlines)
-                    await MainActor.run { TextInjector.inject(clean, after: context) }
+                    await MainActor.run {
+                        if !TextInjector.inject(clean, after: context) {
+                            // The grant silently died (stale TCC entry). The text survives
+                            // on the clipboard; reopen the checklist so the user can see
+                            // exactly which permission broke and fix it in one click.
+                            NSSound.beep()
+                            self.showOnboarding()
+                        }
+                    }
                 }
             } catch {
                 NSLog("[Susurro] pipeline failed: \(error.localizedDescription)")
