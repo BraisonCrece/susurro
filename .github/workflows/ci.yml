@@ -1,0 +1,16 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      # Same universal build the release runs, so toolchain/SDK divergences from local
+      # CLT builds surface on push instead of at tag time.
+      - name: Build and package (ad-hoc signed)
+        run: ./build-app.sh --version 0.0.0-ci

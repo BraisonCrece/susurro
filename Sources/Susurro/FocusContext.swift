@@ -16,10 +16,12 @@ enum FocusContext {
         else { return nil }
         let focused = focusedRef as! AXUIElement
 
-        // Never read (nor ship to the cloud) password fields.
+        // Never read (nor ship to the cloud) password fields. The C constant
+        // kAXSecureTextFieldRole is a CFSTR macro that not every SDK exposes to Swift;
+        // AppKit's typed role is the portable spelling.
         var roleRef: CFTypeRef?
         if AXUIElementCopyAttributeValue(focused, kAXRoleAttribute as CFString, &roleRef) == .success,
-           roleRef as? String == kAXSecureTextFieldRole {
+           roleRef as? String == NSAccessibility.Role.secureTextField.rawValue {
             return nil
         }
 
