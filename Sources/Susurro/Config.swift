@@ -1,6 +1,10 @@
 import Foundation
 
 struct Config {
+    static let defaultTranscriptionModel = "whisper-large-v3-turbo"
+    static let defaultCleanupModel = "llama-3.3-70b-versatile"
+    private static let placeholderKey = "gsk_REPLACE_ME"
+
     var groqApiKey: String
     var transcriptionModel: String
     var cleanupModel: String
@@ -8,7 +12,7 @@ struct Config {
     var systemPrompt: String
 
     var hasKey: Bool {
-        !groqApiKey.isEmpty && groqApiKey != "gsk_REPLACE_ME"
+        !groqApiKey.isEmpty && groqApiKey != Self.placeholderKey
     }
 
     static let defaultSystemPrompt = """
@@ -41,55 +45,73 @@ struct Config {
     Output ONLY the resulting text, with no preamble.
     """
 
+    // MARK: - Persistence
+
+    /// On-disk shape. Every field is optional so a hand-edited file can omit anything, and
+    /// defaults are never frozen into the file — prompt or model improvements shipped in
+    /// later builds reach existing installs.
+    private struct Stored: Codable {
+        var groqApiKey: String?
+        var transcriptionModel: String?
+        var cleanupModel: String?
+        var language: String?
+        var systemPrompt: String?
+    }
+
     func save() throws {
-        var dict: [String: Any] = [
-            "groqApiKey": groqApiKey,
-            "transcriptionModel": transcriptionModel,
-            "cleanupModel": cleanupModel
-        ]
-        if let language, !language.isEmpty { dict["language"] = language }
-        if systemPrompt != Self.defaultSystemPrompt { dict["systemPrompt"] = systemPrompt }
-        let data = try JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys])
+        let stored = Stored(
+            groqApiKey: groqApiKey,
+            transcriptionModel: transcriptionModel,
+            cleanupModel: cleanupModel,
+            language: language.flatMap { $0.isEmpty ? nil : $0 },
+            systemPrompt: systemPrompt == Self.defaultSystemPrompt ? nil : systemPrompt
+        )
         try FileManager.default.createDirectory(at: Self.configDir, withIntermediateDirectories: true)
-        try data.write(to: Self.configURL)
+        try Self.encoder.encode(stored).write(to: Self.configURL)
     }
 
     static func load() -> Config {
-        var json: [String: Any] = [:]
-        if let data = try? Data(contentsOf: configURL),
-           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            json = obj
-        }
-        let envKey = ProcessInfo.processInfo.environment["GROQ_API_KEY"]
+        let stored = (try? Data(contentsOf: configURL))
+            .flatMap { try? JSONDecoder().decode(Stored.self, from: $0) }
+            ?? Stored()
         return Config(
-            groqApiKey: (json["groqApiKey"] as? String) ?? envKey ?? "",
-            transcriptionModel: (json["transcriptionModel"] as? String) ?? "whisper-large-v3-turbo",
-            cleanupModel: (json["cleanupModel"] as? String) ?? "llama-3.3-70b-versatile",
-            language: json["language"] as? String,
-            systemPrompt: (json["systemPrompt"] as? String) ?? defaultSystemPrompt
+            groqApiKey: stored.groqApiKey ?? ProcessInfo.processInfo.environment["GROQ_API_KEY"] ?? "",
+            transcriptionModel: stored.transcriptionModel ?? defaultTranscriptionModel,
+            cleanupModel: stored.cleanupModel ?? defaultCleanupModel,
+            language: stored.language,
+            systemPrompt: stored.systemPrompt ?? defaultSystemPrompt
         )
-    }
-
-    static var configDir: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/susurro", isDirectory: true)
-    }
-
-    static var configURL: URL {
-        configDir.appendingPathComponent("config.json")
     }
 
     static func writeTemplateIfMissing() {
         try? FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
         guard !FileManager.default.fileExists(atPath: configURL.path) else { return }
-        let template = """
-        {
-          "groqApiKey": "gsk_REPLACE_ME",
-          "transcriptionModel": "whisper-large-v3-turbo",
-          "cleanupModel": "llama-3.3-70b-versatile",
-          "language": "es"
-        }
-        """
-        try? template.data(using: .utf8)?.write(to: configURL)
+        let template = Stored(
+            groqApiKey: placeholderKey,
+            transcriptionModel: defaultTranscriptionModel,
+            cleanupModel: defaultCleanupModel,
+            language: "es",
+            systemPrompt: nil
+        )
+        try? encoder.encode(template).write(to: configURL)
+    }
+
+    private static let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return encoder
+    }()
+
+    static var configDir: URL {
+        // Honor $HOME like any tool that keeps dotfiles under ~/.config (the Foundation
+        // home-directory APIs ignore it and always use the account's home). This also lets
+        // tests point the config at a scratch directory.
+        let home = ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory()
+        return URL(fileURLWithPath: home, isDirectory: true)
+            .appendingPathComponent(".config/susurro", isDirectory: true)
+    }
+
+    static var configURL: URL {
+        configDir.appendingPathComponent("config.json")
     }
 }

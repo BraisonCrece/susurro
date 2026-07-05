@@ -11,10 +11,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let overlay = RecordingOverlay()
     private let settings = SettingsWindowController()
     private var config = Config.load()
-    private var isProcessing = false
 
     private lazy var idleIcon = Self.barsImage(color: .black, template: true)
     private lazy var recordingIcon = Self.barsImage(color: .systemRed, template: false)
+
+    /// Single source of truth for the dictation pipeline. Driving the menu-bar icon and the
+    /// overlay from here keeps them in sync, and makes stray hotkey events (like a tap while
+    /// a previous dictation is still processing) harmless no-ops.
+    private var state: State = .idle {
+        didSet {
+            guard state != oldValue else { return }
+            statusItem.button?.image = state == .recording ? recordingIcon : idleIcon
+            switch state {
+            case .idle: overlay.hide()
+            case .recording: overlay.showRecording()
+            case .processing: overlay.showProcessing()
+            }
+        }
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Config.writeTemplateIfMissing()
@@ -40,7 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        setIcon(.idle)
+        statusItem.button?.image = idleIcon
 
         let menu = NSMenu()
         menu.addItem(disabled: "Susurro")
@@ -51,15 +65,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(action: "Salir", #selector(NSApplication.terminate(_:)), target: nil, key: "q")
         statusItem.menu = menu
-    }
-
-    private func setIcon(_ state: State) {
-        guard let button = statusItem.button else { return }
-        button.title = ""
-        switch state {
-        case .idle, .processing: button.image = idleIcon
-        case .recording: button.image = recordingIcon
-        }
     }
 
     /// The Susurro equalizer motif rendered as a menu-bar glyph. As a template image it adapts
@@ -98,25 +103,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Recording pipeline
 
     private func startRecording() {
-        guard !isProcessing else { return }
+        guard state == .idle else { return }
         do {
             try recorder.start()
-            setIcon(.recording)
-            overlay.showRecording()
+            state = .recording
         } catch {
             NSLog("[Susurro] record start failed: \(error)")
         }
     }
 
     private func stopAndProcess() {
+        guard state == .recording else { return }
         guard let fileURL = recorder.stop() else {
-            setIcon(.idle)
-            overlay.hide()
+            state = .idle
             return
         }
-        isProcessing = true
-        setIcon(.processing)
-        overlay.showProcessing()
+        state = .processing
         let cfg = config
 
         Task {
@@ -125,23 +127,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let client = GroqClient(config: cfg)
                 let raw = try await client.transcribe(fileURL: fileURL)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !raw.isEmpty else { await self.finish(); return }
-
-                let clean = try await client.cleanup(transcript: raw)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                await MainActor.run { TextInjector.inject(clean) }
+                if !raw.isEmpty {
+                    let clean = try await client.cleanup(transcript: raw)
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    await MainActor.run { TextInjector.inject(clean) }
+                }
             } catch {
                 NSLog("[Susurro] pipeline failed: \(error.localizedDescription)")
             }
-            await self.finish()
+            await MainActor.run { self.state = .idle }
         }
-    }
-
-    @MainActor
-    private func finish() {
-        isProcessing = false
-        setIcon(.idle)
-        overlay.hide()
     }
 
     // MARK: - Config actions

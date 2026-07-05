@@ -3,7 +3,7 @@ import AVFoundation
 /// Captures the microphone and resamples to 16 kHz mono 16-bit PCM (the sweet spot for
 /// speech APIs: tiny payloads, no quality loss for ASR). Writes a WAV file on stop.
 final class AudioRecorder {
-    enum RecorderError: Error { case noInput }
+    enum RecorderError: Error { case noInput, unsupportedFormat }
 
     private let engine = AVAudioEngine()
     private var converter: AVAudioConverter?
@@ -19,18 +19,29 @@ final class AudioRecorder {
     var onLevel: ((Float) -> Void)?
 
     func start() throws {
+        guard !isRecording else { return }
         lock.lock(); pcmData.removeAll(keepingCapacity: true); lock.unlock()
 
         let input = engine.inputNode
         let inputFormat = input.inputFormat(forBus: 0)
         guard inputFormat.sampleRate > 0 else { throw RecorderError.noInput }
+        guard let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
+            throw RecorderError.unsupportedFormat
+        }
+        self.converter = converter
 
-        converter = AVAudioConverter(from: inputFormat, to: targetFormat)
         input.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
             self?.append(buffer)
         }
         engine.prepare()
-        try engine.start()
+        do {
+            try engine.start()
+        } catch {
+            // Leave the node clean: a leftover tap makes the next installTap throw an
+            // Objective-C exception (uncatchable from Swift) and crash the app.
+            input.removeTap(onBus: 0)
+            throw error
+        }
         isRecording = true
     }
 

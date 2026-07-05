@@ -27,7 +27,9 @@ del bundle).
 
 ## Configuración
 
-Al primer arranque se crea `~/.config/susurro/config.json`. Pon tu clave ahí:
+Abre **Configuración…** desde el icono de la barra de menús (o ⌘,) para poner tu API key,
+el idioma y los modelos. Todo vive en `~/.config/susurro/config.json` (se crea al primer
+arranque), que también puedes editar a mano — reinicia la app para que recoja los cambios:
 
 ```json
 {
@@ -38,9 +40,9 @@ Al primer arranque se crea `~/.config/susurro/config.json`. Pon tu clave ahí:
 }
 ```
 
-Luego usa **Recargar configuración** en el menú. Opcional: `systemPrompt` para personalizar
-las reglas de limpieza, y `language` (código ISO, p. ej. `es` / `en`) para fijar el idioma de
-la transcripción. También se acepta la variable de entorno `GROQ_API_KEY`.
+Opcional: `systemPrompt` para personalizar las reglas de limpieza (solo editable en el
+JSON), y `language` (código ISO, p. ej. `es` / `en`) para fijar el idioma de la
+transcripción. También se acepta la variable de entorno `GROQ_API_KEY`.
 
 ## Permisos
 

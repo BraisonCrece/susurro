@@ -45,16 +45,22 @@ struct SettingsView: View {
                     .keyboardShortcut(.cancelAction)
                 Button("Guardar", action: save)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(apiKey.isEmpty)
+                    .disabled(trimmedKey.isEmpty)
             }
         }
         .padding(20)
         .frame(width: 460)
     }
 
+    /// Pasted keys often drag a trailing newline along; whitespace in the Authorization
+    /// header makes every Groq request fail.
+    private var trimmedKey: String {
+        apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func save() {
         var config = initial
-        config.groqApiKey = apiKey
+        config.groqApiKey = trimmedKey
         config.language = language.isEmpty ? nil : language
         config.transcriptionModel = transcriptionModel
         config.cleanupModel = cleanupModel

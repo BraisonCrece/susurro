@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import CoreGraphics
 
 /// Pastes text into whatever app has focus by briefly hijacking the clipboard:
@@ -7,8 +8,16 @@ enum TextInjector {
     static func inject(_ text: String) {
         guard !text.isEmpty else { return }
         let pasteboard = NSPasteboard.general
-        let saved = snapshot(pasteboard)
 
+        // Without the Accessibility grant the synthetic ⌘V never lands. Leave the text on
+        // the clipboard (and skip the restore) so a manual paste can still recover it.
+        guard AXIsProcessTrusted() else {
+            pasteboard.clearContents()
+            pasteboard.setString(text, forType: .string)
+            return
+        }
+
+        let saved = snapshot(pasteboard)
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
         paste()

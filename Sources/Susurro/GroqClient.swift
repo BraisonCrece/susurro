@@ -22,10 +22,8 @@ struct GroqClient {
 
     func transcribe(fileURL: URL) async throws -> String {
         let boundary = "Boundary-\(UUID().uuidString)"
-        var request = URLRequest(url: URL(string: "\(base)/audio/transcriptions")!)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(config.groqApiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var request = makeRequest(path: "audio/transcriptions",
+                                  contentType: "multipart/form-data; boundary=\(boundary)")
 
         var body = Data()
         let audio = try Data(contentsOf: fileURL)
@@ -42,50 +40,72 @@ struct GroqClient {
         body.appendString("--\(boundary)--\r\n")
         request.httpBody = body
 
-        let (data, response) = try await session.data(for: request)
-        try Self.check(response, data)
+        let data = try await send(request)
         guard let text = String(data: data, encoding: .utf8) else { throw ClientError.badResponse }
         return text
     }
 
     func cleanup(transcript: String) async throws -> String {
-        var request = URLRequest(url: URL(string: "\(base)/chat/completions")!)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(config.groqApiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let payload: [String: Any] = [
-            "model": config.cleanupModel,
-            "temperature": 0.1,
-            "messages": [
-                ["role": "system", "content": config.systemPrompt],
-                ["role": "user", "content": transcript]
+        var request = makeRequest(path: "chat/completions", contentType: "application/json")
+        request.httpBody = try JSONEncoder().encode(ChatRequest(
+            model: config.cleanupModel,
+            temperature: 0.1,
+            messages: [
+                .init(role: "system", content: config.systemPrompt),
+                .init(role: "user", content: transcript)
             ]
-        ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        ))
 
-        let (data, response) = try await session.data(for: request)
-        try Self.check(response, data)
-        guard
-            let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let choices = object["choices"] as? [[String: Any]],
-            let message = choices.first?["message"] as? [String: Any],
-            let content = message["content"] as? String
+        let data = try await send(request)
+        guard let reply = try? JSONDecoder().decode(ChatResponse.self, from: data),
+              let content = reply.choices.first?.message.content
         else { throw ClientError.badResponse }
         return content
+    }
+
+    // MARK: - Wire types
+
+    private struct ChatRequest: Encodable {
+        struct Message: Encodable {
+            let role: String
+            let content: String
+        }
+
+        let model: String
+        let temperature: Double
+        let messages: [Message]
+    }
+
+    private struct ChatResponse: Decodable {
+        struct Choice: Decodable { let message: Message }
+        struct Message: Decodable { let content: String }
+
+        let choices: [Choice]
+    }
+
+    // MARK: - Plumbing
+
+    private func makeRequest(path: String, contentType: String) -> URLRequest {
+        var request = URLRequest(url: URL(string: "\(base)/\(path)")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(config.groqApiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        return request
+    }
+
+    private func send(_ request: URLRequest) async throws -> Data {
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw ClientError.badResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            throw ClientError.http(http.statusCode, String(data: data, encoding: .utf8) ?? "")
+        }
+        return data
     }
 
     private func appendField(_ name: String, _ value: String, to body: inout Data, boundary: String) {
         body.appendString("--\(boundary)\r\n")
         body.appendString("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
         body.appendString("\(value)\r\n")
-    }
-
-    private static func check(_ response: URLResponse, _ data: Data) throws {
-        guard let http = response as? HTTPURLResponse else { throw ClientError.badResponse }
-        guard (200..<300).contains(http.statusCode) else {
-            throw ClientError.http(http.statusCode, String(data: data, encoding: .utf8) ?? "")
-        }
     }
 }
 

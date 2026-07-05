@@ -19,6 +19,7 @@ final class RecordingOverlay {
     private var smoothedLevel: CGFloat = 0
     private var pulse: CGFloat = 0
     private var mode: OverlayMode = .recording
+    private var generation = 0
 
     init() {
         let size = NSSize(width: 132, height: 40)
@@ -87,16 +88,22 @@ final class RecordingOverlay {
     }
 
     func hide() {
+        generation += 1
+        let token = generation
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.18
             panel.animator().alphaValue = 0
         }, completionHandler: { [weak self] in
-            self?.panel.orderOut(nil)
-            self?.stopTimer()
+            // A new recording may have presented the panel while the fade-out ran;
+            // only the latest transition gets to tear it down.
+            guard let self, self.generation == token else { return }
+            self.panel.orderOut(nil)
+            self.stopTimer()
         })
     }
 
     private func present() {
+        generation += 1
         positionPanel()
         panel.orderFrontRegardless()
         NSAnimationContext.runAnimationGroup { context in
