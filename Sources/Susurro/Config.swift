@@ -14,6 +14,9 @@ struct Config {
     /// burst dictations continue the sentence naturally. Off ⇒ nothing but the audio ever
     /// leaves the machine.
     var useCursorContext: Bool
+    /// Terms Whisper tends to misspell (product names, jargon). They bias the transcription
+    /// and the refiner enforces their exact spelling.
+    var dictionary: [String]
 
     var hasKey: Bool {
         !groqApiKey.isEmpty && groqApiKey != Self.placeholderKey
@@ -75,6 +78,7 @@ struct Config {
         var language: String?
         var systemPrompt: String?
         var useCursorContext: Bool?
+        var dictionary: [String]?
     }
 
     func save() throws {
@@ -84,7 +88,8 @@ struct Config {
             cleanupModel: cleanupModel,
             language: language.flatMap { $0.isEmpty ? nil : $0 },
             systemPrompt: systemPrompt == Self.defaultSystemPrompt ? nil : systemPrompt,
-            useCursorContext: useCursorContext ? nil : false
+            useCursorContext: useCursorContext ? nil : false,
+            dictionary: dictionary.isEmpty ? nil : dictionary
         )
         try FileManager.default.createDirectory(at: Self.configDir, withIntermediateDirectories: true)
         try Self.encoder.encode(stored).write(to: Self.configURL)
@@ -100,7 +105,8 @@ struct Config {
             cleanupModel: stored.cleanupModel ?? defaultCleanupModel,
             language: stored.language,
             systemPrompt: stored.systemPrompt ?? defaultSystemPrompt,
-            useCursorContext: stored.useCursorContext ?? true
+            useCursorContext: stored.useCursorContext ?? true,
+            dictionary: stored.dictionary ?? []
         )
     }
 

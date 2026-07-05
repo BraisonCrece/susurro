@@ -37,6 +37,12 @@ struct GroqClient {
         if let language = config.language, !language.isEmpty {
             appendField("language", language, to: &body, boundary: boundary)
         }
+        if !config.dictionary.isEmpty {
+            // Whisper biases its decoding toward vocabulary present in the prompt field
+            // (capped at ~224 tokens, so keep it well under).
+            let vocabulary = String(config.dictionary.joined(separator: ", ").prefix(600))
+            appendField("prompt", vocabulary, to: &body, boundary: boundary)
+        }
         body.appendString("--\(boundary)--\r\n")
         request.httpBody = body
 

@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var transcriptionModel: String
     @State private var cleanupModel: String
     @State private var useCursorContext: Bool
+    @State private var dictionary: String
 
     init(initial: Config, onSave: @escaping (Config) -> Void, onCancel: @escaping () -> Void) {
         self.initial = initial
@@ -21,6 +22,7 @@ struct SettingsView: View {
         _transcriptionModel = State(initialValue: initial.transcriptionModel)
         _cleanupModel = State(initialValue: initial.cleanupModel)
         _useCursorContext = State(initialValue: initial.useCursorContext)
+        _dictionary = State(initialValue: initial.dictionary.joined(separator: ", "))
     }
 
     var body: some View {
@@ -37,6 +39,7 @@ struct SettingsView: View {
                 }
                 TextField("Modelo de transcripción", text: $transcriptionModel)
                 TextField("Modelo de refinado", text: $cleanupModel)
+                TextField("Diccionario (términos separados por comas)", text: $dictionary)
                 Toggle("Leer el texto junto al cursor para continuar frases", isOn: $useCursorContext)
             }
 
@@ -68,6 +71,10 @@ struct SettingsView: View {
         config.transcriptionModel = transcriptionModel
         config.cleanupModel = cleanupModel
         config.useCursorContext = useCursorContext
+        config.dictionary = dictionary
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
         onSave(config)
     }
 }
