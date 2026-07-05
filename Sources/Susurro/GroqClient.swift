@@ -38,9 +38,15 @@ struct GroqClient {
             appendField("language", language, to: &body, boundary: boundary)
         }
         if !config.dictionary.isEmpty {
-            // Whisper biases its decoding toward vocabulary present in the prompt field
-            // (capped at ~224 tokens, so keep it well under).
-            let vocabulary = String(config.dictionary.joined(separator: ", ").prefix(600))
+            // Whisper biases its decoding toward vocabulary present in the prompt field,
+            // which caps at ~224 tokens. Budget by whole terms — a term cut in half would
+            // bias toward the wrong spelling.
+            var vocabulary = ""
+            for term in config.dictionary {
+                let candidate = vocabulary.isEmpty ? term : "\(vocabulary), \(term)"
+                guard candidate.count <= 600 else { break }
+                vocabulary = candidate
+            }
             appendField("prompt", vocabulary, to: &body, boundary: boundary)
         }
         body.appendString("--\(boundary)--\r\n")
