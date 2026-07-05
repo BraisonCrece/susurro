@@ -28,7 +28,10 @@ final class RecordingOverlay {
                       backing: .buffered,
                       defer: false)
         panel.isFloatingPanel = true
-        panel.level = .statusBar
+        // .statusBar gets hidden together with the menu bar over fullscreen Spaces;
+        // .screenSaver floats above fullscreen apps (the level HUDs like the volume
+        // indicator use).
+        panel.level = .screenSaver
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
@@ -105,6 +108,7 @@ final class RecordingOverlay {
     private func present() {
         generation += 1
         positionPanel()
+        if !panel.isVisible { panel.alphaValue = 0 }
         panel.orderFrontRegardless()
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.15
@@ -114,10 +118,17 @@ final class RecordingOverlay {
     }
 
     private func positionPanel() {
-        guard let screen = NSScreen.main else { return }
-        let frame = screen.frame
+        // NSScreen.main follows our own (nonexistent) key window, which on multi-display
+        // setups means "the primary screen" — not where the user is typing. The screen
+        // under the mouse is the best cheap proxy for where the dictation will land.
+        let mouse = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) }
+            ?? NSScreen.main ?? NSScreen.screens.first
+        guard let screen else { return }
+        let visible = screen.visibleFrame
         let size = panel.frame.size
-        panel.setFrameOrigin(NSPoint(x: frame.midX - size.width / 2, y: frame.minY + 140))
+        // ~5 mm (14 pt) above the bottom of the usable area, so the Dock never covers it.
+        panel.setFrameOrigin(NSPoint(x: visible.midX - size.width / 2, y: visible.minY + 14))
     }
 
     private func startTimer() {
