@@ -48,6 +48,25 @@ actualizaciones…** in the menu.
 2. Speak. Correct yourself naturally ("...tomorrow, no wait, Thursday").
 3. Release. In ~1 s the clean text appears wherever your cursor is.
 
+## Smart dictation
+
+- **Continues your text.** Susurro reads the ~200 characters before the caret (through
+  Accessibility — never password fields) so burst dictations get the leading space and
+  capitalization right. Toggleable in settings (`useCursorContext`); when off, nothing but
+  the audio leaves your machine.
+- **Spoken lists.** "para la compra: uno manzanas, dos plátanos…" comes out as a numbered
+  list, keeping your intro line.
+- **Dictated punctuation.** "coma", "punto", "question mark"… become the marks themselves.
+- **Identifier casing.** "user id en camel case" → `userId`, "max retries en snake case en
+  mayúsculas" → `MAX_RETRIES`.
+- **Personal dictionary.** Your jargon ("Whitebox, Sorbet, Temporal…") biases Whisper's
+  decoding itself and the refiner enforces the exact spelling. Edit it in settings.
+- **Technical mode.** When the frontmost app is a terminal or code editor (`technicalApps`
+  in the config, sensible defaults included), dictated commands come out verbatim: "git
+  commit guión guión amend" → `git commit --amend`.
+- **Silence never types.** Too-short, too-quiet or speech-free recordings are discarded
+  before reaching the API, so Whisper's silence hallucinations ("You're welcome") are gone.
+
 ## Configuration
 
 Open **Configuración…** from the menu bar icon (or ⌘,) to set your API key, the language
@@ -63,9 +82,11 @@ launch), which you can also edit by hand — restart the app to pick up changes:
 }
 ```
 
-Optional: `systemPrompt` to customize the cleanup rules (only editable in the JSON), and
-`language` (ISO code, e.g. `es` / `en`) to pin the transcription language. The
-`GROQ_API_KEY` environment variable is also honored.
+Optional keys: `systemPrompt` to customize the cleanup rules (JSON only), `language` (ISO
+code, e.g. `es` / `en`) to pin the transcription language, `dictionary` (array of terms for
+the personal dictionary), `useCursorContext` (default `true`), and `technicalApps` (array
+of bundle IDs that trigger technical mode). The `GROQ_API_KEY` environment variable is
+also honored.
 
 ## Permissions
 
