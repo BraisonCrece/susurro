@@ -7,6 +7,9 @@ struct Recording {
     let duration: TimeInterval
     /// Loudest per-buffer RMS seen during the capture, linear 0…1.
     let peakLevel: Float
+    /// Seconds of audio whose buffers exceeded the speech threshold. Speech has sustained
+    /// energy; sparse transients (key clicks, a cough) barely accumulate any.
+    let activeDuration: TimeInterval
 }
 
 /// Captures the microphone and resamples to 16 kHz mono 16-bit PCM (the sweet spot for
@@ -20,8 +23,12 @@ final class AudioRecorder {
                                              sampleRate: 16000,
                                              channels: 1,
                                              interleaved: true)!
+    /// Linear RMS ≈ −45 dB: quieter buffers count as room noise, not speech.
+    private let speechThreshold: Float = 0.006
+
     private var pcmData = Data()
     private var peakRMS: Float = 0
+    private var activeSamples = 0
     private let lock = NSLock()
     private var isRecording = false
 
@@ -30,7 +37,7 @@ final class AudioRecorder {
 
     func start() throws {
         guard !isRecording else { return }
-        lock.lock(); pcmData.removeAll(keepingCapacity: true); peakRMS = 0; lock.unlock()
+        lock.lock(); pcmData.removeAll(keepingCapacity: true); peakRMS = 0; activeSamples = 0; lock.unlock()
 
         let input = engine.inputNode
         let inputFormat = input.inputFormat(forBus: 0)
@@ -60,10 +67,13 @@ final class AudioRecorder {
         isRecording = false
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
-        lock.lock(); let data = pcmData; let peak = peakRMS; lock.unlock()
+        lock.lock(); let data = pcmData; let peak = peakRMS; let active = activeSamples; lock.unlock()
         guard !data.isEmpty, let url = writeWav(data) else { return nil }
         let duration = Double(data.count / MemoryLayout<Int16>.size) / targetFormat.sampleRate
-        return Recording(fileURL: url, duration: duration, peakLevel: peak)
+        return Recording(fileURL: url,
+                         duration: duration,
+                         peakLevel: peak,
+                         activeDuration: Double(active) / targetFormat.sampleRate)
     }
 
     private func append(_ buffer: AVAudioPCMBuffer) {
@@ -99,6 +109,7 @@ final class AudioRecorder {
         lock.lock()
         pcmData.append(bytes)
         peakRMS = max(peakRMS, rms)
+        if rms > speechThreshold { activeSamples += count }
         lock.unlock()
 
         onLevel?(rms)

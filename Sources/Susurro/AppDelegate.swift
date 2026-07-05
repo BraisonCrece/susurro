@@ -144,11 +144,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Below either threshold there was no speech, just an accidental tap or room noise.
-    /// Whisper hallucinates polite phrases ("You're welcome", "Gracias por ver el vídeo")
-    /// on speechless audio, so it must never reach the API.
+    /// Below any of these thresholds there was no speech — an accidental tap, room noise or
+    /// a couple of key clicks. Whisper hallucinates on speechless audio ("You're welcome",
+    /// "¡Suscríbete al canal!") and reports it as confident speech (no_speech_prob = 0, so
+    /// no server-side signal catches it); the only reliable gate is here, before the API.
     private static let minDuration: TimeInterval = 0.4
     private static let minPeakLevel: Float = 0.006 // ≈ −45 dB
+    private static let minActiveDuration: TimeInterval = 0.2
 
     private func stopAndProcess() {
         guard state == .recording else { return }
@@ -156,9 +158,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             state = .idle
             return
         }
-        guard recording.duration >= Self.minDuration, recording.peakLevel >= Self.minPeakLevel else {
-            NSLog("[Susurro] discarded silent recording (%.2fs, peak %.4f)",
-                  recording.duration, recording.peakLevel)
+        guard recording.duration >= Self.minDuration,
+              recording.peakLevel >= Self.minPeakLevel,
+              recording.activeDuration >= Self.minActiveDuration
+        else {
+            NSLog("[Susurro] discarded speechless recording (%.2fs, peak %.4f, active %.2fs)",
+                  recording.duration, recording.peakLevel, recording.activeDuration)
             try? FileManager.default.removeItem(at: recording.fileURL)
             state = .idle
             return
