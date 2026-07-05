@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Import signing certificate
+        env:
+          SIGNING_CERT_P12_BASE64: ${{ secrets.SIGNING_CERT_P12_BASE64 }}
+          SIGNING_CERT_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          CERT_PATH="$RUNNER_TEMP/susurro.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          echo -n "$SIGNING_CERT_P12_BASE64" | base64 --decode -o "$CERT_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$SIGNING_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
+          # Trust the self-signed cert so codesign accepts it (sudo is passwordless on runners).
+          sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain .github/susurro-signing-cert.pem
+
+      - name: Build, package and sign
+        run: ./build-app.sh --version "${GITHUB_REF_NAME#v}"
+
+      - name: Generate appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          mkdir -p dist
+          ditto -c -k --keepParent Susurro.app "dist/Susurro-${GITHUB_REF_NAME#v}.zip"
+          GENERATE_APPCAST=$(find .build/artifacts -type f -name generate_appcast | head -1)
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | "$GENERATE_APPCAST" \
+            --ed-key-file - \
+            --download-url-prefix "https://github.com/BraisonCrece/susurro/releases/download/${GITHUB_REF_NAME}/" \
+            -o dist/appcast.xml dist
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/Susurro-*.zip dist/appcast.xml \
+            --title "Susurro ${GITHUB_REF_NAME#v}" \
+            --generate-notes

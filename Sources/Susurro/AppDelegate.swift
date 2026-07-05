@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import ApplicationServices
+import Sparkle
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private enum State { case idle, recording, processing }
@@ -11,6 +12,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let overlay = RecordingOverlay()
     private let settings = SettingsWindowController()
     private var config = Config.load()
+
+    /// Sparkle solo funciona dentro de un bundle .app; en ejecuciones de desarrollo
+    /// (`swift build` + binario suelto) se queda sin arrancar y su ítem de menú no hace nada.
+    private let updater = SPUStandardUpdaterController(
+        startingUpdater: Bundle.main.bundleIdentifier != nil,
+        updaterDelegate: nil,
+        userDriverDelegate: nil
+    )
 
     private lazy var idleIcon = Self.barsImage(color: .black, template: true)
     private lazy var recordingIcon = Self.barsImage(color: .systemRed, template: false)
@@ -56,12 +65,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = idleIcon
 
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
         let menu = NSMenu()
-        menu.addItem(disabled: "Susurro")
+        menu.addItem(disabled: version.map { "Susurro \($0)" } ?? "Susurro")
         menu.addItem(.separator())
         menu.addItem(disabled: "Mantén ⌥ (Option derecho) para dictar")
         menu.addItem(.separator())
         menu.addItem(action: "Configuración…", #selector(openSettings), target: self, key: ",")
+        menu.addItem(action: "Buscar actualizaciones…",
+                     #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
+                     target: updater, key: "")
         menu.addItem(.separator())
         menu.addItem(action: "Salir", #selector(NSApplication.terminate(_:)), target: nil, key: "q")
         statusItem.menu = menu

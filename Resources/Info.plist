@@ -24,5 +24,11 @@
     <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>Susurro graba tu voz para transcribirla y pegar el texto.</string>
+    <key>SUFeedURL</key>
+    <string>https://github.com/BraisonCrece/susurro/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>UU4IxDKWbFZakhCxsT/nCOUIm26q6DF1FBKfulxY05o=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
 </dict>
 </plist>
