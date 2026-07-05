@@ -77,6 +77,7 @@ struct SettingsView: View {
                 Picker("Idioma del dictado", selection: $language) {
                     Text("Detección automática").tag("")
                     Text("Español").tag("es")
+                    Text("Galego").tag("gl")
                     Text("English").tag("en")
                 }
                 Toggle("Contexto del cursor", isOn: $useCursorContext)
