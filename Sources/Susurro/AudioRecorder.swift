@@ -1,5 +1,14 @@
 import AVFoundation
 
+/// A finished capture: the WAV on disk plus the signal stats the app uses to discard
+/// recordings that contain no speech (Whisper hallucinates phrases on silent audio).
+struct Recording {
+    let fileURL: URL
+    let duration: TimeInterval
+    /// Loudest per-buffer RMS seen during the capture, linear 0…1.
+    let peakLevel: Float
+}
+
 /// Captures the microphone and resamples to 16 kHz mono 16-bit PCM (the sweet spot for
 /// speech APIs: tiny payloads, no quality loss for ASR). Writes a WAV file on stop.
 final class AudioRecorder {
@@ -12,6 +21,7 @@ final class AudioRecorder {
                                              channels: 1,
                                              interleaved: true)!
     private var pcmData = Data()
+    private var peakRMS: Float = 0
     private let lock = NSLock()
     private var isRecording = false
 
@@ -20,7 +30,7 @@ final class AudioRecorder {
 
     func start() throws {
         guard !isRecording else { return }
-        lock.lock(); pcmData.removeAll(keepingCapacity: true); lock.unlock()
+        lock.lock(); pcmData.removeAll(keepingCapacity: true); peakRMS = 0; lock.unlock()
 
         let input = engine.inputNode
         let inputFormat = input.inputFormat(forBus: 0)
@@ -45,14 +55,15 @@ final class AudioRecorder {
         isRecording = true
     }
 
-    func stop() -> URL? {
+    func stop() -> Recording? {
         guard isRecording else { return nil }
         isRecording = false
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
-        lock.lock(); let data = pcmData; lock.unlock()
-        guard !data.isEmpty else { return nil }
-        return writeWav(data)
+        lock.lock(); let data = pcmData; let peak = peakRMS; lock.unlock()
+        guard !data.isEmpty, let url = writeWav(data) else { return nil }
+        let duration = Double(data.count / MemoryLayout<Int16>.size) / targetFormat.sampleRate
+        return Recording(fileURL: url, duration: duration, peakLevel: peak)
     }
 
     private func append(_ buffer: AVAudioPCMBuffer) {
@@ -75,18 +86,22 @@ final class AudioRecorder {
         guard status != .error, let channel = out.int16ChannelData else { return }
         let count = Int(out.frameLength)
         guard count > 0 else { return }
-        let bytes = Data(bytes: channel[0], count: count * MemoryLayout<Int16>.size)
-        lock.lock(); pcmData.append(bytes); lock.unlock()
 
-        if let onLevel {
-            let samples = channel[0]
-            var sum: Float = 0
-            for i in 0..<count {
-                let sample = Float(samples[i]) / 32768.0
-                sum += sample * sample
-            }
-            onLevel(sqrt(sum / Float(count)))
+        let samples = channel[0]
+        var sum: Float = 0
+        for i in 0..<count {
+            let sample = Float(samples[i]) / 32768.0
+            sum += sample * sample
         }
+        let rms = sqrt(sum / Float(count))
+
+        let bytes = Data(bytes: samples, count: count * MemoryLayout<Int16>.size)
+        lock.lock()
+        pcmData.append(bytes)
+        peakRMS = max(peakRMS, rms)
+        lock.unlock()
+
+        onLevel?(rms)
     }
 
     private func writeWav(_ pcm: Data) -> URL? {
