@@ -15,7 +15,7 @@ let package = Package(
             ],
             path: "Sources/Susurro",
             linkerSettings: [
-                // Sparkle.framework se embebe en Contents/Frameworks al empaquetar (build-app.sh)
+                // Sparkle.framework is embedded into Contents/Frameworks at packaging time (build-app.sh)
                 .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
             ]
         )

@@ -11,7 +11,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --version) VERSION="$2"; shift 2 ;;
         --install) INSTALL=true; shift ;;
-        *) echo "Uso: $0 [--version X.Y.Z] [--install]"; exit 1 ;;
+        *) echo "Usage: $0 [--version X.Y.Z] [--install]"; exit 1 ;;
     esac
 done
 

@@ -13,8 +13,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settings = SettingsWindowController()
     private var config = Config.load()
 
-    /// Sparkle solo funciona dentro de un bundle .app; en ejecuciones de desarrollo
-    /// (`swift build` + binario suelto) se queda sin arrancar y su ítem de menú no hace nada.
+    /// Sparkle only works inside an .app bundle; in development runs (`swift build` + bare
+    /// binary) it stays unstarted and its menu item is a no-op.
     private let updater = SPUStandardUpdaterController(
         startingUpdater: Bundle.main.bundleIdentifier != nil,
         updaterDelegate: nil,
@@ -161,7 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 try updated.save()
                 self.config = updated
             } catch {
-                NSLog("[Susurro] no se pudo guardar la configuración: \(error)")
+                NSLog("[Susurro] failed to save config: \(error)")
             }
         }
     }

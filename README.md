@@ -1,39 +1,52 @@
 # Susurro
 
-Dictado inteligente para macOS, estilo Wispr Flow / SuperWhisper, con todo el procesamiento
-en la nube vía Groq. App de menu bar nativa, sin cómputo local.
+Smart dictation for macOS, in the spirit of Wispr Flow / SuperWhisper, with all the
+processing in the cloud via Groq. Native menu bar app, no local compute.
 
-**Flujo:** mantienes ⌥ (Option derecho) y hablas → al soltar, el audio va a Groq Whisper
-(`whisper-large-v3-turbo`) → el transcript crudo pasa a un LLM rápido
-(`llama-3.3-70b-versatile`) que elimina muletillas, resuelve autocorrecciones y puntúa → el
-texto limpio se pega solo en la app que tengas enfocada y se restaura tu portapapeles.
+**Flow:** hold ⌥ (right Option) and speak → on release, the audio goes to Groq Whisper
+(`whisper-large-v3-turbo`) → the raw transcript goes through a fast LLM
+(`llama-3.3-70b-versatile`) that removes filler words, applies self-corrections and fixes
+punctuation → the clean text is pasted wherever your cursor is, and your clipboard is
+restored.
 
-## Instalación
+The app UI is currently Spanish-only.
 
-1. Baja el último `Susurro-x.y.z.zip` desde
-   [Releases](https://github.com/BraisonCrece/susurro/releases/latest) y descomprímelo.
-2. Arrastra `Susurro.app` a **Aplicaciones** y ábrela.
-3. La primera vez macOS dirá que no puede verificar la app (no está notarizada). Cierra el
-   aviso y ve a **Ajustes del Sistema › Privacidad y seguridad**, baja hasta el mensaje
-   sobre Susurro y pulsa **Abrir igualmente**. Solo pasa una vez.
-4. Concede los dos permisos que pide: **Micrófono** y **Accesibilidad**.
-5. Pon tu API key de Groq (gratis en https://console.groq.com/keys) en la ventana de
-   configuración que se abre desde el icono de la barra de menús.
+## Install
 
-Las actualizaciones llegan solas: la app avisa cuando hay una versión nueva y se actualiza
-sin perder los permisos. También puedes forzarlo con **Buscar actualizaciones…** en el menú.
+1. Download the latest `Susurro-x.y.z.zip` from
+   [Releases](https://github.com/BraisonCrece/susurro/releases/latest) and unzip it.
+2. Drag `Susurro.app` into **Applications** and open it.
+3. The first time, macOS will warn that it could not verify the app and only offer
+   **Done** / **Move to Trash**. Don't trash it! Click **Done**, then go to
+   **System Settings › Privacy & Security**, scroll down to the Susurro message and click
+   **Open Anyway**. This only happens once — the app is not notarized, since that requires
+   Apple's $99/year developer program.
 
-## Uso
+   If no "Open Anyway" button shows up, run this one-liner in Terminal instead:
 
-1. Mantén pulsado **⌥ derecho**.
-2. Habla. Corrígete con naturalidad ("...mañana, no, el jueves").
-3. Suelta. En ~1 s el texto limpio aparece donde tengas el cursor.
+   ```sh
+   xattr -rd com.apple.quarantine /Applications/Susurro.app
+   ```
 
-## Configuración
+4. Grant the two permissions it asks for: **Microphone** and **Accessibility**.
+5. Set your Groq API key (free at https://console.groq.com/keys) in the settings window,
+   reachable from the menu bar icon.
 
-Abre **Configuración…** desde el icono de la barra de menús (o ⌘,) para poner tu API key,
-el idioma y los modelos. Todo vive en `~/.config/susurro/config.json` (se crea al primer
-arranque), que también puedes editar a mano — reinicia la app para que recoja los cambios:
+Updates arrive on their own: the app notifies you when a new version is out and updates
+itself without losing permissions. You can also force a check with **Buscar
+actualizaciones…** in the menu.
+
+## Usage
+
+1. Hold **right ⌥**.
+2. Speak. Correct yourself naturally ("...tomorrow, no wait, Thursday").
+3. Release. In ~1 s the clean text appears wherever your cursor is.
+
+## Configuration
+
+Open **Configuración…** from the menu bar icon (or ⌘,) to set your API key, the language
+and the models. Everything lives in `~/.config/susurro/config.json` (created on first
+launch), which you can also edit by hand — restart the app to pick up changes:
 
 ```json
 {
@@ -44,48 +57,48 @@ arranque), que también puedes editar a mano — reinicia la app para que recoja
 }
 ```
 
-Opcional: `systemPrompt` para personalizar las reglas de limpieza (solo editable en el
-JSON), y `language` (código ISO, p. ej. `es` / `en`) para fijar el idioma de la
-transcripción. También se acepta la variable de entorno `GROQ_API_KEY`.
+Optional: `systemPrompt` to customize the cleanup rules (only editable in the JSON), and
+`language` (ISO code, e.g. `es` / `en`) to pin the transcription language. The
+`GROQ_API_KEY` environment variable is also honored.
 
-## Permisos
+## Permissions
 
-- **Micrófono** — para grabar.
-- **Accesibilidad** — para monitorizar la tecla global y simular ⌘V.
+- **Microphone** — to record.
+- **Accessibility** — to monitor the global key and synthesize ⌘V.
 
-Si tras concederlos sigue sin funcionar, quita y vuelve a añadir Susurro en la lista de
-Accesibilidad (TCC a veces cachea el grant de una versión anterior).
+If it still doesn't work after granting them, remove and re-add Susurro in the
+Accessibility list (TCC sometimes caches the grant of a previous version).
 
-## Desarrollo
+## Development
 
-Requisitos: macOS 13+, toolchain de Swift (Xcode o Command Line Tools).
+Requirements: macOS 13+, a Swift toolchain (Xcode or Command Line Tools).
 
 ```sh
-./build-app.sh                    # compila, empaqueta y firma Susurro.app
-./build-app.sh --install          # además lo copia a /Applications
+./build-app.sh                    # builds, bundles and signs Susurro.app
+./build-app.sh --install          # additionally copies it to /Applications
 open Susurro.app
 ```
 
-Para iterar puedes compilar sin empaquetar con `swift build`, pero el **micrófono solo
-funciona desde el `.app`** (macOS exige el `NSMicrophoneUsageDescription` del bundle) y
-Sparkle solo arranca dentro del bundle.
+For quick iteration you can build without bundling using `swift build`, but the
+**microphone only works from the `.app`** (macOS requires the bundle's
+`NSMicrophoneUsageDescription`) and Sparkle only starts inside the bundle.
 
-El script firma con la identidad self-signed **"Susurro"** del llavero si existe (estable →
-los permisos TCC sobreviven a los rebuilds); si no, firma ad-hoc.
+The script signs with the self-signed **"Susurro"** keychain identity when present
+(stable → TCC grants survive rebuilds); otherwise it falls back to ad-hoc signing.
 
-### Personalizar la tecla
+### Customizing the trigger key
 
-El trigger está en `Sources/Susurro/HotkeyManager.swift` (`triggerKeyCode = 61`, Option
-derecho). Otros keycodes útiles: Command derecho `54`, Control derecho `62`, Shift derecho
-`60`. Usa una tecla **modificadora** para que el trigger no escriba caracteres en la app.
+The trigger lives in `Sources/Susurro/HotkeyManager.swift` (`triggerKeyCode = 61`, right
+Option). Other useful keycodes: right Command `54`, right Control `62`, right Shift `60`.
+Use a **modifier** key so the trigger never types characters into the focused app.
 
-### Publicar una versión
+### Publishing a release
 
 ```sh
 git tag v1.0.1 && git push origin v1.0.1
 ```
 
-GitHub Actions ([release.yml](.github/workflows/release.yml)) compila, firma con el
-certificado "Susurro", genera el `appcast.xml` de Sparkle y publica la release con el zip.
-Secrets necesarios en el repo: `SIGNING_CERT_P12_BASE64`, `SIGNING_CERT_PASSWORD`,
-`KEYCHAIN_PASSWORD` y `SPARKLE_PRIVATE_KEY`.
+GitHub Actions ([release.yml](.github/workflows/release.yml)) builds a universal binary,
+signs it with the "Susurro" certificate, generates Sparkle's `appcast.xml` and publishes
+the release with the zip. Required repo secrets: `SIGNING_CERT_P12_BASE64`,
+`SIGNING_CERT_PASSWORD`, `KEYCHAIN_PASSWORD` and `SPARKLE_PRIVATE_KEY`.
