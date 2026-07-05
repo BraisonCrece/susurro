@@ -59,13 +59,14 @@ actualizaciones…** in the menu.
 - **Dictated punctuation.** "coma", "punto", "question mark"… become the marks themselves.
 - **Identifier casing.** "user id en camel case" → `userId`, "max retries en snake case en
   mayúsculas" → `MAX_RETRIES`.
-- **Personal dictionary.** Your jargon ("Whitebox, Sorbet, Temporal…") biases Whisper's
-  decoding itself and the refiner enforces the exact spelling. Edit it in settings.
+- **Personal dictionary.** Your jargon ("Whitebox, Sorbet, Temporal…") biases the
+  transcription model itself and the refiner enforces the exact spelling. Edit it in
+  settings.
 - **Technical mode.** When the frontmost app is a terminal or code editor (`technicalApps`
   in the config, sensible defaults included), dictated commands come out verbatim: "git
   commit guión guión amend" → `git commit --amend`.
 - **Silence never types.** Too-short, too-quiet or speech-free recordings are discarded
-  before reaching the API, so Whisper's silence hallucinations ("You're welcome") are gone.
+  before reaching the API, so silence hallucinations ("You're welcome") are gone.
 
 ## Configuration
 

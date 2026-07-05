@@ -91,7 +91,7 @@ struct SettingsView: View {
 
     private var dictionaryTab: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Términos que Whisper suele escribir mal: nombres propios, marcas, jerga. Se transcriben y se corrigen siempre con esta grafía exacta.")
+            Text("Términos que Susurro suele escribir mal: nombres propios, marcas, jerga. Se transcriben y se corrigen siempre con esta grafía exacta.")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -126,7 +126,7 @@ struct SettingsView: View {
             } header: {
                 Text("Modelos de Groq")
             } footer: {
-                Text("Whisper transcribe el audio y el modelo de refinado limpia el texto. Déjalos como están salvo que sepas lo que buscas.")
+                Text("El modelo de transcripción convierte tu voz en texto y el de refinado lo limpia. Déjalos como están salvo que sepas lo que buscas.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
