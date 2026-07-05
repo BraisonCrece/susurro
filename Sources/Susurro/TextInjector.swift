@@ -13,22 +13,23 @@ enum TextInjector {
 
     private static var last: LastInjection?
 
+    enum InjectionResult {
+        case pasted
+        /// The synthetic ⌘V was impossible (Accessibility grant missing, or silently
+        /// invalidated by TCC); the text was left on the clipboard for a manual paste.
+        case clipboardFallback
+    }
+
     /// `context` is the text right before the caret when it could be read (see
     /// FocusContext); nil falls back to the last-injection heuristic.
-    /// Returns false when the paste could not be synthesized (Accessibility grant missing
-    /// or revoked — TCC can silently invalidate it) and the text was only left on the
-    /// clipboard; callers should surface that instead of failing silently.
-    @discardableResult
-    static func inject(_ text: String, after context: String? = nil) -> Bool {
-        guard !text.isEmpty else { return true }
+    static func inject(_ text: String, after context: String? = nil) -> InjectionResult {
+        guard !text.isEmpty else { return .pasted }
         let pasteboard = NSPasteboard.general
 
-        // Without the Accessibility grant the synthetic ⌘V never lands. Leave the text on
-        // the clipboard (and skip the restore) so a manual paste can still recover it.
         guard AXIsProcessTrusted() else {
             pasteboard.clearContents()
             pasteboard.setString(text, forType: .string)
-            return false
+            return .clipboardFallback
         }
 
         let frontApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
@@ -52,7 +53,7 @@ enum TextInjector {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             restore(saved, to: pasteboard)
         }
-        return true
+        return .pasted
     }
 
     // MARK: - Leading space

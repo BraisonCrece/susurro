@@ -12,6 +12,26 @@ struct Recording {
     let activeDuration: TimeInterval
 }
 
+extension Recording {
+    private static let minDuration: TimeInterval = 0.4
+    private static let minPeakLevel: Float = 0.006 // ≈ −45 dB
+    private static let minActiveDuration: TimeInterval = 0.2
+
+    /// Below any of these thresholds there was no speech — an accidental tap, room noise
+    /// or a couple of key clicks. Whisper hallucinates on speechless audio ("You're
+    /// welcome", "¡Suscríbete al canal!") and reports it as confident speech
+    /// (no_speech_prob = 0), so the only reliable gate is client-side, before the API.
+    var hasSpeech: Bool {
+        duration >= Self.minDuration
+            && peakLevel >= Self.minPeakLevel
+            && activeDuration >= Self.minActiveDuration
+    }
+
+    func removeFile() {
+        try? FileManager.default.removeItem(at: fileURL)
+    }
+}
+
 /// Captures the microphone and resamples to 16 kHz mono 16-bit PCM (the sweet spot for
 /// speech APIs: tiny payloads, no quality loss for ASR). Writes a WAV file on stop.
 final class AudioRecorder {

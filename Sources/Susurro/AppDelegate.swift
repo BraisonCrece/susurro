@@ -24,6 +24,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private lazy var idleIcon = Self.barsImage(color: .black, template: true)
     private lazy var recordingIcon = Self.barsImage(color: .systemRed, template: false)
+    private lazy var errorIcon = NSImage(systemSymbolName: "exclamationmark.triangle.fill",
+                                         accessibilityDescription: "Susurro error")
 
     /// Single source of truth for the dictation pipeline. Driving the menu-bar icon and the
     /// overlay from here keeps them in sync, and makes stray hotkey events (like a tap while
@@ -144,61 +146,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Below any of these thresholds there was no speech — an accidental tap, room noise or
-    /// a couple of key clicks. Whisper hallucinates on speechless audio ("You're welcome",
-    /// "¡Suscríbete al canal!") and reports it as confident speech (no_speech_prob = 0, so
-    /// no server-side signal catches it); the only reliable gate is here, before the API.
-    private static let minDuration: TimeInterval = 0.4
-    private static let minPeakLevel: Float = 0.006 // ≈ −45 dB
-    private static let minActiveDuration: TimeInterval = 0.2
-
     private func stopAndProcess() {
         guard state == .recording else { return }
         guard let recording = recorder.stop() else {
             state = .idle
             return
         }
-        guard recording.duration >= Self.minDuration,
-              recording.peakLevel >= Self.minPeakLevel,
-              recording.activeDuration >= Self.minActiveDuration
-        else {
+        guard recording.hasSpeech else {
             NSLog("[Susurro] discarded speechless recording (%.2fs, peak %.4f, active %.2fs)",
                   recording.duration, recording.peakLevel, recording.activeDuration)
-            try? FileManager.default.removeItem(at: recording.fileURL)
+            recording.removeFile()
             state = .idle
             return
         }
         state = .processing
-        let cfg = config
-        let fileURL = recording.fileURL
+
+        let pipeline = DictationPipeline(config: config)
         // Captured now, while the caret is still where the text will land.
-        let context = cfg.useCursorContext ? FocusContext.textBeforeCaret() : nil
+        let context = config.useCursorContext ? FocusContext.textBeforeCaret() : nil
         let frontApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        let technical = frontApp.map(cfg.technicalApps.contains) ?? false
+        let technical = frontApp.map(config.technicalApps.contains) ?? false
 
         Task {
-            defer { try? FileManager.default.removeItem(at: fileURL) }
-            do {
-                let client = GroqClient(config: cfg)
-                let raw = try await client.transcribe(fileURL: fileURL)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                if !raw.isEmpty {
-                    let clean = try await client.cleanup(transcript: raw, context: context, technical: technical)
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
-                    await MainActor.run {
-                        if !TextInjector.inject(clean, after: context) {
-                            // The grant silently died (stale TCC entry). The text survives
-                            // on the clipboard; reopen the checklist so the user can see
-                            // exactly which permission broke and fix it in one click.
-                            NSSound.beep()
-                            self.showOnboarding()
-                        }
-                    }
-                }
-            } catch {
-                NSLog("[Susurro] pipeline failed: \(error.localizedDescription)")
-            }
-            await MainActor.run { self.state = .idle }
+            let outcome = await pipeline.run(recording: recording, context: context, technical: technical)
+            await MainActor.run { self.finish(with: outcome) }
+        }
+    }
+
+    /// The only place a dictation outcome becomes UI.
+    @MainActor
+    private func finish(with outcome: DictationOutcome) {
+        state = .idle
+        switch outcome {
+        case .injected, .empty:
+            break
+        case .clipboardOnly:
+            // The text survives on the clipboard; the checklist window shows exactly
+            // which permission died and fixes it in one click.
+            showOnboarding()
+        case .failed(let error):
+            NSLog("[Susurro] pipeline failed: \(error.localizedDescription)")
+            flashErrorIcon()
+        }
+    }
+
+    /// Brief ⚠️ in the menu bar: enough to say "that dictation was lost" without
+    /// interrupting whatever the user is doing (details are in the log).
+    private func flashErrorIcon() {
+        statusItem.button?.image = errorIcon
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            guard let self, self.state == .idle else { return }
+            self.statusItem.button?.image = self.idleIcon
         }
     }
 
