@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotkey = HotkeyManager()
     private let overlay = RecordingOverlay()
     private let settings = SettingsWindowController()
+    private let onboarding = OnboardingWindowController()
     private var config = Config.load()
 
     /// Sparkle only works inside an .app bundle; in development runs (`swift build` + bare
@@ -42,20 +43,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         Config.writeTemplateIfMissing()
         setupStatusItem()
-        requestPermissions()
 
         recorder.onLevel = { [weak self] level in self?.overlay.update(level: level) }
         hotkey.onPress = { [weak self] in self?.startRecording() }
         hotkey.onRelease = { [weak self] in self?.stopAndProcess() }
         hotkey.start()
 
-        if !config.hasKey { showMissingKeyAlert() }
+        if onboardingNeeded { showOnboarding() }
     }
 
     /// Reopening the app (from Raycast, Spotlight or the Dock) has no main window to restore,
-    /// so we surface the settings window instead.
+    /// so we surface the onboarding while setup is incomplete, or the settings otherwise.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        openSettings()
+        if onboardingNeeded {
+            showOnboarding()
+        } else {
+            openSettings()
+        }
         return true
     }
 
@@ -105,12 +109,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return image
     }
 
-    // MARK: - Permissions
+    // MARK: - Onboarding
 
-    private func requestPermissions() {
-        AVCaptureDevice.requestAccess(for: .audio) { _ in }
-        let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as NSString: true]
-        _ = AXIsProcessTrustedWithOptions(options)
+    /// Everything a fresh install must have before dictation can work.
+    private var onboardingNeeded: Bool {
+        !config.hasKey
+            || !AXIsProcessTrusted()
+            || AVCaptureDevice.authorizationStatus(for: .audio) != .authorized
+    }
+
+    private func showOnboarding() {
+        onboarding.show(hasKey: config.hasKey) { [weak self] key in
+            guard let self else { return }
+            var updated = self.config
+            updated.groqApiKey = key
+            do {
+                try updated.save()
+                self.config = updated
+            } catch {
+                NSLog("[Susurro] failed to save config: \(error)")
+            }
+        }
     }
 
     // MARK: - Recording pipeline
@@ -166,14 +185,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func showMissingKeyAlert() {
-        let alert = NSAlert()
-        alert.messageText = "Falta la API key de Groq"
-        alert.informativeText = "Abre la configuración y pega tu clave de Groq para empezar a dictar."
-        alert.addButton(withTitle: "Abrir configuración")
-        alert.addButton(withTitle: "Más tarde")
-        if alert.runModal() == .alertFirstButtonReturn { openSettings() }
-    }
 }
 
 private extension NSMenu {

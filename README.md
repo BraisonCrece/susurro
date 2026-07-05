@@ -13,24 +13,30 @@ The app UI is currently Spanish-only.
 
 ## Install
 
+Paste this in Terminal — it installs the latest release into /Applications and opens it,
+skipping the Gatekeeper dance entirely:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/BraisonCrece/susurro/main/install.sh | bash
+```
+
+On first launch Susurro opens a setup window that walks you through the two permissions
+(Microphone, Accessibility — with live checkmarks and buttons that jump straight to the
+right System Settings pane) and your Groq API key (free at https://console.groq.com/keys).
+
+<details>
+<summary>Manual install (no Terminal)</summary>
+
 1. Download the latest `Susurro-x.y.z.zip` from
-   [Releases](https://github.com/BraisonCrece/susurro/releases/latest) and unzip it.
-2. Drag `Susurro.app` into **Applications** and open it.
-3. The first time, macOS will warn that it could not verify the app and only offer
+   [Releases](https://github.com/BraisonCrece/susurro/releases/latest), unzip it and drag
+   `Susurro.app` into **Applications**.
+2. On first open, macOS will warn that it could not verify the app and only offer
    **Done** / **Move to Trash**. Don't trash it! Click **Done**, then go to
    **System Settings › Privacy & Security**, scroll down to the Susurro message and click
    **Open Anyway**. This only happens once — the app is not notarized, since that requires
    Apple's $99/year developer program.
 
-   If no "Open Anyway" button shows up, run this one-liner in Terminal instead:
-
-   ```sh
-   xattr -rd com.apple.quarantine /Applications/Susurro.app
-   ```
-
-4. Grant the two permissions it asks for: **Microphone** and **Accessibility**.
-5. Set your Groq API key (free at https://console.groq.com/keys) in the settings window,
-   reachable from the menu bar icon.
+</details>
 
 Updates arrive on their own: the app notifies you when a new version is out and updates
 itself without losing permissions. You can also force a check with **Buscar

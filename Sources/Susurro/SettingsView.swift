@@ -68,15 +68,15 @@ struct SettingsView: View {
     }
 }
 
-/// Hosts the SwiftUI settings form in a regular window. The app is normally an accessory
-/// (menu-bar only), so it switches to a regular activation policy while the window is open
-/// to take keyboard focus, and back to accessory when it closes.
+/// Hosts the SwiftUI settings form in a regular window; AppActivation flips the app out of
+/// accessory mode while it is open so the fields can take keyboard focus.
 final class SettingsWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
 
     func show(config: Config, onSave: @escaping (Config) -> Void) {
         if let window {
-            activate(window)
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
             return
         }
 
@@ -92,17 +92,12 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.delegate = self
         window.center()
         self.window = window
-        activate(window)
-    }
-
-    private func activate(_ window: NSWindow) {
-        NSApp.setActivationPolicy(.regular)
+        AppActivation.windowDidOpen()
         window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     func windowWillClose(_ notification: Notification) {
         window = nil
-        NSApp.setActivationPolicy(.accessory)
+        AppActivation.windowDidClose()
     }
 }

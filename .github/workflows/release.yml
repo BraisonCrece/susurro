@@ -50,6 +50,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/Susurro-*.zip dist/appcast.xml \
+          # Fixed-name copy (outside dist so generate_appcast never sees it) that gives
+          # install.sh a stable releases/latest/download/Susurro.zip URL.
+          cp dist/Susurro-*.zip Susurro.zip
+          gh release create "$GITHUB_REF_NAME" dist/Susurro-*.zip dist/appcast.xml Susurro.zip \
             --title "Susurro ${GITHUB_REF_NAME#v}" \
             --generate-notes
