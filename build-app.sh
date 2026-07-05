@@ -15,10 +15,17 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-echo "==> Building release binary"
-swift build -c release
-
-BIN=".build/release/$APP"
+# Universal (arm64 + x86_64) needs xcbuild, which ships with full Xcode but not with the
+# Command Line Tools; with CLT only, fall back to a native single-arch build.
+if [ -d "$(xcode-select -p 2>/dev/null)/../SharedFrameworks/XCBuild.framework" ]; then
+    echo "==> Building release binary (universal)"
+    swift build -c release --arch arm64 --arch x86_64
+    BIN=".build/apple/Products/Release/$APP"
+else
+    echo "==> Building release binary ($(uname -m) only; universal builds need full Xcode)"
+    swift build -c release
+    BIN=".build/release/$APP"
+fi
 [ -f "$BIN" ] || { echo "Binary not found at $BIN"; exit 1; }
 
 # The Sparkle SPM artifact ships the framework inside an xcframework; pick the macOS slice.
