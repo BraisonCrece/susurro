@@ -4,15 +4,8 @@ import CoreGraphics
 
 /// Pastes text into whatever app has focus by briefly hijacking the clipboard:
 /// snapshot the current contents, write our text, synthesize ⌘V, then restore the snapshot.
+/// Pure mechanism: it pastes exactly what it is given — spacing policy lives upstream.
 enum TextInjector {
-    private struct LastInjection {
-        let text: String
-        let at: Date
-        let appBundleId: String?
-    }
-
-    private static var last: LastInjection?
-
     enum InjectionResult {
         case pasted
         /// The synthetic ⌘V was impossible (Accessibility grant missing, or silently
@@ -20,9 +13,7 @@ enum TextInjector {
         case clipboardFallback
     }
 
-    /// `context` is the text right before the caret when it could be read (see
-    /// FocusContext); nil falls back to the last-injection heuristic.
-    static func inject(_ text: String, after context: String? = nil) -> InjectionResult {
+    static func inject(_ text: String) -> InjectionResult {
         guard !text.isEmpty else { return .pasted }
         let pasteboard = NSPasteboard.general
 
@@ -32,50 +23,16 @@ enum TextInjector {
             return .clipboardFallback
         }
 
-        let frontApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        let needsLeadingSpace: Bool
-        if let context {
-            needsLeadingSpace = context.last.flatMap { previous in
-                text.first.map { needsSpace(between: previous, and: $0) }
-            } ?? false
-        } else {
-            needsLeadingSpace = heuristicNeedsLeadingSpace(before: text, in: frontApp)
-        }
-        let toPaste = needsLeadingSpace ? " " + text : text
-
         let saved = snapshot(pasteboard)
         pasteboard.clearContents()
-        pasteboard.setString(toPaste, forType: .string)
+        pasteboard.setString(text, forType: .string)
         paste()
-        last = LastInjection(text: toPaste, at: Date(), appBundleId: frontApp)
 
         // Restore only after the focused app has had time to read the clipboard.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             restore(saved, to: pasteboard)
         }
         return .pasted
-    }
-
-    // MARK: - Leading space
-
-    /// Dictating in bursts ("…el jueves." + ⌥ + "Además…") pastes flush against the
-    /// previous sentence. Without reading the target field, all we know is our own last
-    /// paste — trust it while it is fresh and the user stayed in the same app.
-    private static func heuristicNeedsLeadingSpace(before text: String, in app: String?) -> Bool {
-        guard let last,
-              Date().timeIntervalSince(last.at) < 120,
-              last.appBundleId == app,
-              let previous = last.text.last,
-              let first = text.first
-        else { return false }
-        return needsSpace(between: previous, and: first)
-    }
-
-    static func needsSpace(between previous: Character, and next: Character) -> Bool {
-        guard !previous.isWhitespace else { return false }
-        let noSpaceAfter: Set<Character> = ["(", "[", "{", "¿", "¡", "\"", "'", "«", "/", "@", "#", "-", "_"]
-        guard !noSpaceAfter.contains(previous) else { return false }
-        return next.isLetter || next.isNumber || next == "¿" || next == "¡"
     }
 
     private static func paste() {

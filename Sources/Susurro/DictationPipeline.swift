@@ -30,8 +30,9 @@ struct DictationPipeline {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard !clean.isEmpty else { return .empty }
 
+            let text = Self.applyingLeadingSpace(to: clean, after: context)
             return await MainActor.run {
-                switch TextInjector.inject(clean, after: context) {
+                switch TextInjector.inject(text) {
                 case .pasted: return DictationOutcome.injected
                 case .clipboardFallback: return DictationOutcome.clipboardOnly
                 }
@@ -39,5 +40,18 @@ struct DictationPipeline {
         } catch {
             return .failed(error)
         }
+    }
+
+    /// A leading space is added only when the character before the caret could actually be
+    /// read and requires one ("…jueves." + "Además…"). With no readable context the text is
+    /// pasted verbatim: a wrongly added space at a line start is worse than a missing one
+    /// after a period.
+    private static func applyingLeadingSpace(to text: String, after context: String?) -> String {
+        guard let previous = context?.last, let first = text.first else { return text }
+        guard !previous.isWhitespace else { return text }
+        let noSpaceAfter: Set<Character> = ["(", "[", "{", "¿", "¡", "\"", "'", "«", "/", "@", "#", "-", "_"]
+        guard !noSpaceAfter.contains(previous) else { return text }
+        guard first.isLetter || first.isNumber || first == "¿" || first == "¡" else { return text }
+        return " " + text
     }
 }
