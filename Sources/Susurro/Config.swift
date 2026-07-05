@@ -17,6 +17,21 @@ struct Config {
     /// Terms Whisper tends to misspell (product names, jargon). They bias the transcription
     /// and the refiner enforces their exact spelling.
     var dictionary: [String]
+    /// Bundle IDs whose frontmost presence switches the refiner into technical mode
+    /// (verbatim commands, no prose punctuation). Editable in config.json.
+    var technicalApps: [String]
+
+    static let defaultTechnicalApps = [
+        "com.apple.Terminal",
+        "com.googlecode.iterm2",
+        "com.mitchellh.ghostty",
+        "net.kovidgoyal.kitty",
+        "com.github.wez.wezterm",
+        "dev.zed.Zed",
+        "com.microsoft.VSCode",
+        "com.todesktop.230313mzl4w4u92", // Cursor
+        "com.apple.dt.Xcode",
+    ]
 
     var hasKey: Bool {
         !groqApiKey.isEmpty && groqApiKey != Self.placeholderKey
@@ -79,6 +94,7 @@ struct Config {
         var systemPrompt: String?
         var useCursorContext: Bool?
         var dictionary: [String]?
+        var technicalApps: [String]?
     }
 
     func save() throws {
@@ -89,7 +105,8 @@ struct Config {
             language: language.flatMap { $0.isEmpty ? nil : $0 },
             systemPrompt: systemPrompt == Self.defaultSystemPrompt ? nil : systemPrompt,
             useCursorContext: useCursorContext ? nil : false,
-            dictionary: dictionary.isEmpty ? nil : dictionary
+            dictionary: dictionary.isEmpty ? nil : dictionary,
+            technicalApps: technicalApps == Self.defaultTechnicalApps ? nil : technicalApps
         )
         try FileManager.default.createDirectory(at: Self.configDir, withIntermediateDirectories: true)
         try Self.encoder.encode(stored).write(to: Self.configURL)
@@ -106,7 +123,8 @@ struct Config {
             language: stored.language,
             systemPrompt: stored.systemPrompt ?? defaultSystemPrompt,
             useCursorContext: stored.useCursorContext ?? true,
-            dictionary: stored.dictionary ?? []
+            dictionary: stored.dictionary ?? [],
+            technicalApps: stored.technicalApps ?? defaultTechnicalApps
         )
     }
 

@@ -173,6 +173,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let fileURL = recording.fileURL
         // Captured now, while the caret is still where the text will land.
         let context = cfg.useCursorContext ? FocusContext.textBeforeCaret() : nil
+        let frontApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let technical = frontApp.map(cfg.technicalApps.contains) ?? false
 
         Task {
             defer { try? FileManager.default.removeItem(at: fileURL) }
@@ -181,7 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let raw = try await client.transcribe(fileURL: fileURL)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 if !raw.isEmpty {
-                    let clean = try await client.cleanup(transcript: raw, context: context)
+                    let clean = try await client.cleanup(transcript: raw, context: context, technical: technical)
                         .trimmingCharacters(in: .whitespacesAndNewlines)
                     await MainActor.run { TextInjector.inject(clean, after: context) }
                 }
