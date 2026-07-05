@@ -10,6 +10,10 @@ struct Config {
     var cleanupModel: String
     var language: String?
     var systemPrompt: String
+    /// Read the text before the caret (via Accessibility) and send it to the refiner so
+    /// burst dictations continue the sentence naturally. Off ⇒ nothing but the audio ever
+    /// leaves the machine.
+    var useCursorContext: Bool
 
     var hasKey: Bool {
         !groqApiKey.isEmpty && groqApiKey != Self.placeholderKey
@@ -56,6 +60,7 @@ struct Config {
         var cleanupModel: String?
         var language: String?
         var systemPrompt: String?
+        var useCursorContext: Bool?
     }
 
     func save() throws {
@@ -64,7 +69,8 @@ struct Config {
             transcriptionModel: transcriptionModel,
             cleanupModel: cleanupModel,
             language: language.flatMap { $0.isEmpty ? nil : $0 },
-            systemPrompt: systemPrompt == Self.defaultSystemPrompt ? nil : systemPrompt
+            systemPrompt: systemPrompt == Self.defaultSystemPrompt ? nil : systemPrompt,
+            useCursorContext: useCursorContext ? nil : false
         )
         try FileManager.default.createDirectory(at: Self.configDir, withIntermediateDirectories: true)
         try Self.encoder.encode(stored).write(to: Self.configURL)
@@ -79,7 +85,8 @@ struct Config {
             transcriptionModel: stored.transcriptionModel ?? defaultTranscriptionModel,
             cleanupModel: stored.cleanupModel ?? defaultCleanupModel,
             language: stored.language,
-            systemPrompt: stored.systemPrompt ?? defaultSystemPrompt
+            systemPrompt: stored.systemPrompt ?? defaultSystemPrompt,
+            useCursorContext: stored.useCursorContext ?? true
         )
     }
 

@@ -13,7 +13,9 @@ enum TextInjector {
 
     private static var last: LastInjection?
 
-    static func inject(_ text: String) {
+    /// `context` is the text right before the caret when it could be read (see
+    /// FocusContext); nil falls back to the last-injection heuristic.
+    static func inject(_ text: String, after context: String? = nil) {
         guard !text.isEmpty else { return }
         let pasteboard = NSPasteboard.general
 
@@ -26,7 +28,15 @@ enum TextInjector {
         }
 
         let frontApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        let toPaste = heuristicNeedsLeadingSpace(before: text, in: frontApp) ? " " + text : text
+        let needsLeadingSpace: Bool
+        if let context {
+            needsLeadingSpace = context.last.flatMap { previous in
+                text.first.map { needsSpace(between: previous, and: $0) }
+            } ?? false
+        } else {
+            needsLeadingSpace = heuristicNeedsLeadingSpace(before: text, in: frontApp)
+        }
+        let toPaste = needsLeadingSpace ? " " + text : text
 
         let saved = snapshot(pasteboard)
         pasteboard.clearContents()

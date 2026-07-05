@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var language: String
     @State private var transcriptionModel: String
     @State private var cleanupModel: String
+    @State private var useCursorContext: Bool
 
     init(initial: Config, onSave: @escaping (Config) -> Void, onCancel: @escaping () -> Void) {
         self.initial = initial
@@ -19,6 +20,7 @@ struct SettingsView: View {
         _language = State(initialValue: initial.language ?? "")
         _transcriptionModel = State(initialValue: initial.transcriptionModel)
         _cleanupModel = State(initialValue: initial.cleanupModel)
+        _useCursorContext = State(initialValue: initial.useCursorContext)
     }
 
     var body: some View {
@@ -35,6 +37,7 @@ struct SettingsView: View {
                 }
                 TextField("Modelo de transcripción", text: $transcriptionModel)
                 TextField("Modelo de refinado", text: $cleanupModel)
+                Toggle("Leer el texto junto al cursor para continuar frases", isOn: $useCursorContext)
             }
 
             HStack {
@@ -64,6 +67,7 @@ struct SettingsView: View {
         config.language = language.isEmpty ? nil : language
         config.transcriptionModel = transcriptionModel
         config.cleanupModel = cleanupModel
+        config.useCursorContext = useCursorContext
         onSave(config)
     }
 }

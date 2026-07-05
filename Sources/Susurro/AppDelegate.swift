@@ -171,6 +171,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         state = .processing
         let cfg = config
         let fileURL = recording.fileURL
+        // Captured now, while the caret is still where the text will land.
+        let context = cfg.useCursorContext ? FocusContext.textBeforeCaret() : nil
 
         Task {
             defer { try? FileManager.default.removeItem(at: fileURL) }
@@ -179,9 +181,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let raw = try await client.transcribe(fileURL: fileURL)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 if !raw.isEmpty {
-                    let clean = try await client.cleanup(transcript: raw)
+                    let clean = try await client.cleanup(transcript: raw, context: context)
                         .trimmingCharacters(in: .whitespacesAndNewlines)
-                    await MainActor.run { TextInjector.inject(clean) }
+                    await MainActor.run { TextInjector.inject(clean, after: context) }
                 }
             } catch {
                 NSLog("[Susurro] pipeline failed: \(error.localizedDescription)")
