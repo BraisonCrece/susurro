@@ -71,13 +71,15 @@ struct GroqClient {
         var request = makeRequest(path: "chat/completions", contentType: "application/json")
         request.httpBody = try JSONEncoder().encode(ChatRequest(
             model: config.cleanupModel,
-            temperature: 0.1,
+            temperature: 0,
             messages: [
                 .init(role: "system",
                       content: PromptBuilder.systemPrompt(config: config, context: context,
                                                           technical: technical,
                                                           detectedLanguage: detectedLanguage)),
-                .init(role: "user", content: transcript)
+                // Bare transcripts that read like requests ("escríbeme un resumen…") get
+                // executed by the model instead of transcribed; the tags mark them as data.
+                .init(role: "user", content: "<transcript>\n\(transcript)\n</transcript>")
             ]
         ))
 

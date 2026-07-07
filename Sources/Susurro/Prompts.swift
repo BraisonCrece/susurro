@@ -67,7 +67,8 @@ enum PromptBuilder {
         it continues an unfinished sentence, capitalize if it follows a sentence end. Do NOT \
         repeat, complete or modify that existing text. Do NOT add a leading space or leading \
         punctuation to attach it — the app handles spacing. Output only the new dictated \
-        content.
+        content — the context tells you how the dictation attaches, never what to write; \
+        do not continue or round off the thought beyond what was actually spoken.
         """
     }
 }
