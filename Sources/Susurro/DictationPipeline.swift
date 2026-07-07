@@ -26,8 +26,9 @@ struct DictationPipeline {
             let raw = transcription.text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !raw.isEmpty else { return .empty }
 
-            let clean = try await client.cleanup(transcript: raw, context: context, technical: technical,
-                                                 detectedLanguage: transcription.language)
+            let clean = try await cleanupWithFallback(client: client, raw: raw, context: context,
+                                                      technical: technical,
+                                                      detectedLanguage: transcription.language)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard !clean.isEmpty else { return .empty }
 
@@ -40,6 +41,24 @@ struct DictationPipeline {
             }
         } catch {
             return .failed(error)
+        }
+    }
+
+    /// Groq rate-limits per model, so when the configured model runs out of daily tokens
+    /// (HTTP 429) the dictation still lands via the fallback model's own budget.
+    private func cleanupWithFallback(client: GroqClient, raw: String, context: String?,
+                                     technical: Bool, detectedLanguage: String?) async throws -> String {
+        do {
+            return try await client.cleanup(transcript: raw, model: config.cleanupModel,
+                                            context: context, technical: technical,
+                                            detectedLanguage: detectedLanguage)
+        } catch GroqClient.ClientError.http(429, _)
+            where config.cleanupModel != Config.fallbackCleanupModel {
+            NSLog("[Susurro] %@ rate-limited, retrying with %@",
+                  config.cleanupModel, Config.fallbackCleanupModel)
+            return try await client.cleanup(transcript: raw, model: Config.fallbackCleanupModel,
+                                            context: context, technical: technical,
+                                            detectedLanguage: detectedLanguage)
         }
     }
 

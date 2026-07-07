@@ -26,6 +26,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var recordingIcon = Self.barsImage(color: .systemRed, template: false)
     private lazy var errorIcon = NSImage(systemSymbolName: "exclamationmark.triangle.fill",
                                          accessibilityDescription: "Susurro error")
+    /// Hidden until a dictation fails; then it tells what happened and when, because the
+    /// ⚠️ flash alone is mute and the NSLog detail gets redacted in the unified log.
+    private let lastErrorItem = NSMenuItem()
 
     /// Single source of truth for the dictation pipeline. Driving the menu-bar icon and the
     /// overlay from here keeps them in sync, and makes stray hotkey events (like a tap while
@@ -76,6 +79,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(disabled: version.map { "Susurro \($0)" } ?? "Susurro")
         menu.addItem(.separator())
         menu.addItem(disabled: "Mantén ⌥ (Option derecho) para dictar")
+        lastErrorItem.isEnabled = false
+        lastErrorItem.isHidden = true
+        menu.addItem(lastErrorItem)
         menu.addItem(.separator())
         menu.addItem(action: "Configuración…", #selector(openSettings), target: self, key: ",")
         menu.addItem(action: "Buscar actualizaciones…",
@@ -186,7 +192,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             showOnboarding()
         case .failed(let error):
             NSLog("[Susurro] pipeline failed: \(error.localizedDescription)")
+            showLastError(Self.describe(error))
             flashErrorIcon()
+        }
+    }
+
+    private func showLastError(_ description: String) {
+        let time = Date().formatted(date: .omitted, time: .shortened)
+        lastErrorItem.title = "⚠️ \(time) \(description)"
+        lastErrorItem.isHidden = false
+    }
+
+    /// The one line of truth a user can act on, in the app's language.
+    private static func describe(_ error: Error) -> String {
+        switch error {
+        case GroqClient.ClientError.http(401, _):
+            return "La API key de Groq no es válida"
+        case let GroqClient.ClientError.http(429, body):
+            return body.contains("per day") || body.contains("TPD")
+                ? "Cuota diaria de Groq agotada, se recupera sola en unas horas"
+                : "Groq saturado, prueba de nuevo en unos segundos"
+        case let GroqClient.ClientError.http(code, _):
+            return "Groq devolvió HTTP \(code)"
+        case is URLError:
+            return "Sin conexión con Groq"
+        default:
+            return error.localizedDescription
         }
     }
 

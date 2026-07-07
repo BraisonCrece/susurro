@@ -66,11 +66,11 @@ struct GroqClient {
         return Transcription(text: response.text, language: response.language)
     }
 
-    func cleanup(transcript: String, context: String?, technical: Bool,
+    func cleanup(transcript: String, model: String, context: String?, technical: Bool,
                  detectedLanguage: String?) async throws -> String {
         var request = makeRequest(path: "chat/completions", contentType: "application/json")
         request.httpBody = try JSONEncoder().encode(ChatRequest(
-            model: config.cleanupModel,
+            model: model,
             temperature: 0,
             messages: [
                 .init(role: "system",
