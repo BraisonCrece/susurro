@@ -41,11 +41,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard state != oldValue else { return }
             statusItem.button?.image = state == .recording ? recordingIcon : idleIcon
             switch state {
-            case .idle: overlay.hide()
+            case .idle:
+                overlay.hide()
+                // Whatever ended (dictation, cancel), leave the engine prepared so the
+                // next press starts capturing with less cold-start loss.
+                prewarmRecorder()
             case .recording: overlay.showRecording()
             case .processing: overlay.showProcessing()
             }
         }
+    }
+
+    /// Prepared ≠ recording: no hardware starts and the mic indicator stays off. Skipped
+    /// until the microphone grant exists so the first TCC prompt happens on a real
+    /// dictation, not on app launch.
+    private func prewarmRecorder() {
+        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { return }
+        recorder.prewarm()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -57,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkey.onRelease = { [weak self] in self?.stopAndProcess() }
         hotkey.onCancel = { [weak self] in self?.cancelRecording() }
         hotkey.start()
+        prewarmRecorder()
 
         if onboardingNeeded { showOnboarding() }
     }

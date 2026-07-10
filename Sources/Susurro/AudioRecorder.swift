@@ -38,6 +38,8 @@ final class AudioRecorder {
     enum RecorderError: Error { case noInput, unsupportedFormat }
 
     private let engine = AVAudioEngine()
+    /// Recreated on the fly when the input device changes mid-recording, so it is read
+    /// under the lock by the tap thread.
     private var converter: AVAudioConverter?
     private let targetFormat = AVAudioFormat(commonFormat: .pcmFormatInt16,
                                              sampleRate: 16000,
@@ -51,21 +53,57 @@ final class AudioRecorder {
     private var activeSamples = 0
     private let lock = NSLock()
     private var isRecording = false
+    private var configChangeObserver: Any?
 
     /// Normalized 0…1 input level per buffer, for the recording overlay. Called off the main thread.
     var onLevel: ((Float) -> Void)?
+
+    init() {
+        // When the input route changes mid-recording (AirPods die, default input switches)
+        // the engine halts and the tap goes silent for the rest of the take. Rebuilding on
+        // the new device keeps appending to the same 16 kHz stream — a seamless splice.
+        configChangeObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil
+        ) { [weak self] _ in
+            // The HAL needs a beat to settle the new device before it reports a real format.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                self?.rebuildCaptureAfterRouteChange()
+            }
+        }
+    }
+
+    deinit {
+        if let configChangeObserver { NotificationCenter.default.removeObserver(configChangeObserver) }
+    }
+
+    /// Allocates the audio plumbing ahead of time (HAL unit, render resources) WITHOUT
+    /// starting the hardware — no orange mic indicator — so start() skips most of the
+    /// cold-start cost and fewer first syllables are lost. Safe to call repeatedly.
+    func prewarm() {
+        guard !isRecording else { return }
+        _ = engine.inputNode.inputFormat(forBus: 0)
+        engine.prepare()
+    }
 
     func start() throws {
         guard !isRecording else { return }
         lock.lock(); pcmData.removeAll(keepingCapacity: true); peakRMS = 0; activeSamples = 0; lock.unlock()
 
         let input = engine.inputNode
-        let inputFormat = input.inputFormat(forBus: 0)
+        var inputFormat = input.inputFormat(forBus: 0)
+        // Fresh out of sleep the HAL can report 0 Hz for a beat; a brief blocking retry
+        // (worst case 0.5 s, only on that degenerate path) beats failing the dictation.
+        var retries = 0
+        while inputFormat.sampleRate <= 0, retries < 5 {
+            usleep(100_000)
+            inputFormat = input.inputFormat(forBus: 0)
+            retries += 1
+        }
         guard inputFormat.sampleRate > 0 else { throw RecorderError.noInput }
         guard let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
             throw RecorderError.unsupportedFormat
         }
-        self.converter = converter
+        lock.lock(); self.converter = converter; lock.unlock()
 
         input.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
             self?.append(buffer)
@@ -80,6 +118,35 @@ final class AudioRecorder {
             throw error
         }
         isRecording = true
+    }
+
+    /// Reinstalls tap + converter on whatever device the engine reconnected to. If no
+    /// usable input remains (mic unplugged, nothing else), the take keeps what it captured.
+    private func rebuildCaptureAfterRouteChange() {
+        guard isRecording else { return }
+        let input = engine.inputNode
+        input.removeTap(onBus: 0)
+        engine.stop()
+
+        let inputFormat = input.inputFormat(forBus: 0)
+        guard inputFormat.sampleRate > 0,
+              let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
+            NSLog("[Susurro] input device lost mid-recording, keeping captured audio")
+            return
+        }
+        lock.lock(); self.converter = converter; lock.unlock()
+
+        input.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
+            self?.append(buffer)
+        }
+        engine.prepare()
+        do {
+            try engine.start()
+            NSLog("[Susurro] capture rebuilt on new input device (%.0f Hz)", inputFormat.sampleRate)
+        } catch {
+            input.removeTap(onBus: 0)
+            NSLog("[Susurro] capture rebuild failed: \(error)")
+        }
     }
 
     func stop() -> Recording? {
@@ -97,6 +164,7 @@ final class AudioRecorder {
     }
 
     private func append(_ buffer: AVAudioPCMBuffer) {
+        lock.lock(); let converter = self.converter; lock.unlock()
         guard let converter else { return }
         let ratio = targetFormat.sampleRate / buffer.format.sampleRate
         let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 1024
