@@ -79,7 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addItem(disabled: version.map { "Susurro \($0)" } ?? "Susurro")
         menu.addItem(.separator())
-        menu.addItem(disabled: "Mantén ⌥ derecho para dictar")
+        menu.addItem(disabled: "Mantén ⌥ derecho para dictar; un tap lo deja abierto")
         menu.addItem(disabled: "⌥ izquierdo cancela el dictado en curso")
         lastErrorItem.isEnabled = false
         lastErrorItem.isHidden = true
@@ -144,26 +144,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Recording pipeline
 
+    /// No recording runs unbounded: a latched dictation the user forgot (or a wedged key)
+    /// would keep the mic hot and grow past what Groq accepts (~25 MB ≈ 13 min of 16 kHz
+    /// WAV). Five minutes of single-breath dictation is beyond any real use.
+    private static let maxRecordingDuration: TimeInterval = 300
+    private var recordingCap: Timer?
+
     private func startRecording() {
         guard state == .idle else { return }
         do {
             try recorder.start()
             state = .recording
+            recordingCap = Timer.scheduledTimer(withTimeInterval: Self.maxRecordingDuration,
+                                                repeats: false) { [weak self] _ in
+                guard let self, self.state == .recording else { return }
+                self.hotkey.endGesture()
+                self.stopAndProcess()
+            }
         } catch {
             NSLog("[Susurro] record start failed: \(error)")
         }
     }
 
-    /// The user regretted the dictation mid-recording: throw the audio away, nothing
-    /// reaches the network.
+    /// The user regretted the dictation mid-recording (or it was a shortcut all along):
+    /// throw the audio away, nothing reaches the network.
     private func cancelRecording() {
         guard state == .recording else { return }
+        recordingCap?.invalidate()
         recorder.stop()?.removeFile()
         state = .idle
     }
 
     private func stopAndProcess() {
         guard state == .recording else { return }
+        recordingCap?.invalidate()
         guard let recording = recorder.stop() else {
             state = .idle
             return

@@ -48,6 +48,10 @@ actualizaciones…** in the menu.
 2. Speak. Correct yourself naturally ("...tomorrow, no wait, Thursday").
 3. Release. In ~1 s the clean text appears wherever your cursor is.
 
+For longer dictations, **tap** right ⌥ instead (under 0.4 s): recording stays on
+hands-free until you tap it again. Symbol shortcuts stay safe — a tap that was really
+⌥+key (say, typing `@`) never starts a dictation.
+
 Regretted it mid-sentence? Tap **left ⌥** while recording and the dictation is discarded —
 the audio never leaves your machine.
 
