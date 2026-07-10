@@ -18,21 +18,37 @@ enum TextInjector {
         let pasteboard = NSPasteboard.general
 
         guard AXIsProcessTrusted() else {
+            // A deliberate hand-off for a manual ⌘V — a regular (non-transient) write,
+            // so clipboard managers may legitimately keep it.
             pasteboard.clearContents()
             pasteboard.setString(text, forType: .string)
             return .clipboardFallback
         }
 
         let saved = snapshot(pasteboard)
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
+        writeTransient(text, to: pasteboard)
+        let ourChange = pasteboard.changeCount
         paste()
 
-        // Restore only after the focused app has had time to read the clipboard.
+        // Restore only after the focused app has had time to read the clipboard — and
+        // only while it still holds our write: if the user copied something in the
+        // meantime, their copy wins over the snapshot.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            guard pasteboard.changeCount == ourChange else { return }
             restore(saved, to: pasteboard)
         }
         return .pasted
+    }
+
+    /// The dictation passes through the clipboard only to ride the synthetic ⌘V; the
+    /// transient marker (the de-facto standard from nspasteboard.org) tells clipboard
+    /// managers not to record it in their history.
+    private static func writeTransient(_ text: String, to pasteboard: NSPasteboard) {
+        let item = NSPasteboardItem()
+        item.setString(text, forType: .string)
+        item.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
+        pasteboard.clearContents()
+        pasteboard.writeObjects([item])
     }
 
     private static func paste() {
