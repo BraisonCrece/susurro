@@ -18,6 +18,11 @@ let package = Package(
                 // Sparkle.framework is embedded into Contents/Frameworks at packaging time (build-app.sh)
                 .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
             ]
+        ),
+        .testTarget(
+            name: "SusurroTests",
+            dependencies: ["Susurro"],
+            path: "Tests/SusurroTests"
         )
     ]
 )

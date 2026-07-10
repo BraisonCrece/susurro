@@ -34,7 +34,10 @@ struct DictationPipeline {
         } catch {
             return .failed(error)
         }
-        let raw = transcription.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Known mishearings get fixed deterministically before anything else looks at the
+        // transcript: the refiner sees the right spelling, and so does the raw fallback.
+        let raw = Corrections.apply(config.corrections,
+                                    to: transcription.text.trimmingCharacters(in: .whitespacesAndNewlines))
         guard !raw.isEmpty else { return .empty }
 
         // Refinement is an enhancement, never a gate: once Whisper heard the words, text
@@ -89,7 +92,7 @@ struct DictationPipeline {
     /// read and requires one ("…jueves." + "Además…"). With no readable context the text is
     /// pasted verbatim: a wrongly added space at a line start is worse than a missing one
     /// after a period.
-    private static func applyingLeadingSpace(to text: String, after context: String?) -> String {
+    static func applyingLeadingSpace(to text: String, after context: String?) -> String {
         guard let previous = context?.last, let first = text.first else { return text }
         guard !previous.isWhitespace else { return text }
         let noSpaceAfter: Set<Character> = ["(", "[", "{", "¿", "¡", "\"", "'", "«", "/", "@", "#", "-", "_"]

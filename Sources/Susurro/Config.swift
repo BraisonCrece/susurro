@@ -25,9 +25,22 @@ struct Config {
     /// Terms Whisper tends to misspell (product names, jargon). They bias the transcription
     /// and the refiner enforces their exact spelling.
     var dictionary: [String]
+    /// Known mishearings, trigger → exact replacement ("clod" → "Claude"). Applied verbatim
+    /// on whole words over the raw transcript, before (and independently of) the refiner.
+    /// Editable in config.json.
+    var corrections: [String: String]
     /// Bundle IDs whose frontmost presence switches the refiner into technical mode
     /// (verbatim commands, no prose punctuation). Editable in config.json.
     var technicalApps: [String]
+
+    /// Spellings enforced end to end — the personal dictionary plus every correction
+    /// target — for the Whisper bias prompt and the refiner's vocabulary block.
+    var enforcedVocabulary: [String] {
+        var seen = Set<String>()
+        return (dictionary + corrections.values.sorted()).filter {
+            seen.insert($0.lowercased()).inserted
+        }
+    }
 
     static let defaultTechnicalApps = [
         "com.apple.Terminal",
@@ -99,6 +112,7 @@ struct Config {
         var systemPrompt: String?
         var useCursorContext: Bool?
         var dictionary: [String]?
+        var corrections: [String: String]?
         var technicalApps: [String]?
     }
 
@@ -112,6 +126,7 @@ struct Config {
             systemPrompt: systemPrompt == Self.defaultSystemPrompt ? nil : systemPrompt,
             useCursorContext: useCursorContext ? nil : false,
             dictionary: dictionary.isEmpty ? nil : dictionary,
+            corrections: corrections.isEmpty ? nil : corrections,
             technicalApps: technicalApps == Self.defaultTechnicalApps ? nil : technicalApps
         )
         try FileManager.default.createDirectory(at: Self.configDir, withIntermediateDirectories: true)
@@ -131,6 +146,7 @@ struct Config {
             systemPrompt: stored.systemPrompt ?? defaultSystemPrompt,
             useCursorContext: stored.useCursorContext ?? true,
             dictionary: stored.dictionary ?? [],
+            corrections: stored.corrections ?? [:],
             technicalApps: stored.technicalApps ?? defaultTechnicalApps
         )
     }

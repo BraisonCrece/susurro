@@ -12,8 +12,8 @@ enum PromptBuilder {
         if !config.languages.isEmpty {
             sections.append(languagesBlock(config.languages, detected: detectedLanguage))
         }
-        if !config.dictionary.isEmpty {
-            sections.append(vocabularyBlock(config.dictionary))
+        if !config.enforcedVocabulary.isEmpty {
+            sections.append(vocabularyBlock(config.enforcedVocabulary))
         }
         if let context, !context.isEmpty {
             sections.append(contextBlock(context))

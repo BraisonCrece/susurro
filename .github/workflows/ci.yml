@@ -10,6 +10,10 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
+      # XCTest ships with Xcode, not with the Command Line Tools, so the suite runs here
+      # even when the dev machine can't run it.
+      - name: Tests
+        run: swift test
       # Same universal build the release runs, so toolchain/SDK divergences from local
       # CLT builds surface on push instead of at tag time.
       - name: Build and package (ad-hoc signed)

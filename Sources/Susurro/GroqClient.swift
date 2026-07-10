@@ -45,12 +45,12 @@ struct GroqClient {
         if config.languages.count == 1, let only = config.languages.first {
             appendField("language", only, to: &body, boundary: boundary)
         }
-        if !config.dictionary.isEmpty {
+        if !config.enforcedVocabulary.isEmpty {
             // Whisper biases its decoding toward vocabulary present in the prompt field,
             // which caps at ~224 tokens. Budget by whole terms — a term cut in half would
             // bias toward the wrong spelling.
             var vocabulary = ""
-            for term in config.dictionary {
+            for term in config.enforcedVocabulary {
                 let candidate = vocabulary.isEmpty ? term : "\(vocabulary), \(term)"
                 guard candidate.count <= 600 else { break }
                 vocabulary = candidate

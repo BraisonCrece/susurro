@@ -97,9 +97,11 @@ launch), which you can also edit by hand — restart the app to pick up changes:
 
 Optional keys: `systemPrompt` to customize the cleanup rules (JSON only), `languages` (ISO
 codes in order of preference; empty = pure auto-detection; the legacy `language` key is
-still read), `dictionary` (array of terms for the personal dictionary), `useCursorContext`
-(default `true`), and `technicalApps` (array of bundle IDs that trigger technical mode).
-The `GROQ_API_KEY` environment variable is also honored.
+still read), `dictionary` (array of terms for the personal dictionary), `corrections`
+(object mapping habitual mishearings to their exact spelling, e.g. `{"clod": "Claude"}` —
+applied deterministically on whole words, before and independently of the refiner),
+`useCursorContext` (default `true`), and `technicalApps` (array of bundle IDs that trigger
+technical mode). The `GROQ_API_KEY` environment variable is also honored.
 
 ## Permissions
 
@@ -122,6 +124,9 @@ open Susurro.app
 For quick iteration you can build without bundling using `swift build`, but the
 **microphone only works from the `.app`** (macOS requires the bundle's
 `NSMicrophoneUsageDescription`) and Sparkle only starts inside the bundle.
+
+`swift test` runs the unit suite, but needs Xcode (the bare Command Line Tools don't ship
+XCTest); CI runs it on every push either way.
 
 The script signs with the self-signed **"Susurro"** keychain identity when present
 (stable → TCC grants survive rebuilds); otherwise it falls back to ad-hoc signing.
