@@ -48,6 +48,9 @@ actualizaciones…** in the menu.
 2. Speak. Correct yourself naturally ("...tomorrow, no wait, Thursday").
 3. Release. In ~1 s the clean text appears wherever your cursor is.
 
+Regretted it mid-sentence? Tap **left ⌥** while recording and the dictation is discarded —
+the audio never leaves your machine.
+
 ## Smart dictation
 
 - **Continues your text.** Susurro reads the ~200 characters before the caret (through

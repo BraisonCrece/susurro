@@ -52,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         recorder.onLevel = { [weak self] level in self?.overlay.update(level: level) }
         hotkey.onPress = { [weak self] in self?.startRecording() }
         hotkey.onRelease = { [weak self] in self?.stopAndProcess() }
+        hotkey.onCancel = { [weak self] in self?.cancelRecording() }
         hotkey.start()
 
         if onboardingNeeded { showOnboarding() }
@@ -78,7 +79,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addItem(disabled: version.map { "Susurro \($0)" } ?? "Susurro")
         menu.addItem(.separator())
-        menu.addItem(disabled: "Mantén ⌥ (Option derecho) para dictar")
+        menu.addItem(disabled: "Mantén ⌥ derecho para dictar")
+        menu.addItem(disabled: "⌥ izquierdo cancela el dictado en curso")
         lastErrorItem.isEnabled = false
         lastErrorItem.isHidden = true
         menu.addItem(lastErrorItem)
@@ -150,6 +152,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             NSLog("[Susurro] record start failed: \(error)")
         }
+    }
+
+    /// The user regretted the dictation mid-recording: throw the audio away, nothing
+    /// reaches the network.
+    private func cancelRecording() {
+        guard state == .recording else { return }
+        recorder.stop()?.removeFile()
+        state = .idle
     }
 
     private func stopAndProcess() {
