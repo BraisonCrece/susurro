@@ -29,6 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Hidden until a dictation fails; then it tells what happened and when, because the
     /// ⚠️ flash alone is mute and the NSLog detail gets redacted in the unified log.
     private let lastErrorItem = NSMenuItem()
+    /// The last text a dictation delivered, in memory only (nothing persists): the safety
+    /// net for "pasted over it" / "the app ate the paste".
+    private var lastDictation: String?
 
     /// Single source of truth for the dictation pipeline. Driving the menu-bar icon and the
     /// overlay from here keeps them in sync, and makes stray hotkey events (like a tap while
@@ -85,6 +88,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         lastErrorItem.isHidden = true
         menu.addItem(lastErrorItem)
         menu.addItem(.separator())
+        menu.addItem(action: "Copiar último dictado", #selector(copyLastDictation),
+                     target: self, key: "")
         menu.addItem(action: "Configuración…", #selector(openSettings), target: self, key: ",")
         menu.addItem(action: "Buscar actualizaciones…",
                      #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
@@ -208,15 +213,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func finish(with outcome: DictationOutcome) {
         state = .idle
         switch outcome {
-        case .injected, .empty:
+        case .injected(let text):
+            lastDictation = text
+        case .empty:
             break
-        case .injectedRaw(let error):
+        case .injectedRaw(let text, let error):
             // The words landed (raw), so no alarming flash: the menu explains why the
             // text arrived unpolished, for when the user goes looking.
+            lastDictation = text
             showLastError("Refinado caído, se pegó la transcripción tal cual — \(Self.describe(error))")
-        case .clipboardOnly:
+        case .clipboardOnly(let text):
             // The text survives on the clipboard; the checklist window shows exactly
             // which permission died and fixes it in one click.
+            lastDictation = text
             showOnboarding()
         case .failed(let error):
             NSLog("[Susurro] pipeline failed: \(error.localizedDescription)")
@@ -259,6 +268,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// A deliberate copy the user asked for: a plain write, free to live in clipboard
+    /// managers, never auto-restored away.
+    @objc private func copyLastDictation() {
+        guard let lastDictation else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(lastDictation, forType: .string)
+    }
+
     // MARK: - Config actions
 
     @objc private func openSettings() {
@@ -273,6 +290,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+}
+
+extension AppDelegate: NSMenuItemValidation {
+    /// "Copiar último dictado" stays grayed out until a dictation has delivered text.
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(copyLastDictation) { return lastDictation != nil }
+        return true
+    }
 }
 
 private extension NSMenu {

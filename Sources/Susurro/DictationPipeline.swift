@@ -1,16 +1,17 @@
 import AppKit
 
-/// Result of the cloud half of a dictation, for the UI layer to present.
+/// Result of the cloud half of a dictation, for the UI layer to present. Cases that
+/// delivered text carry it, so the UI can offer it again ("Copiar último dictado").
 enum DictationOutcome {
     /// Text landed in the focused app.
-    case injected
+    case injected(String)
     /// The refiner failed, so the raw transcript landed instead — unpolished beats lost.
-    case injectedRaw(Error)
+    case injectedRaw(String, Error)
     /// Nothing worth pasting came back.
     case empty
     /// Text was ready but the synthetic ⌘V was impossible (Accessibility grant missing or
     /// silently invalidated by TCC); it was left on the clipboard instead.
-    case clipboardOnly
+    case clipboardOnly(String)
     /// Transcription failed: there is nothing to deliver.
     case failed(Error)
 }
@@ -63,9 +64,9 @@ struct DictationPipeline {
         return await MainActor.run {
             switch TextInjector.inject(text) {
             case .pasted:
-                return refinerFailure.map(DictationOutcome.injectedRaw) ?? .injected
+                return refinerFailure.map { .injectedRaw(text, $0) } ?? .injected(text)
             case .clipboardFallback:
-                return .clipboardOnly
+                return .clipboardOnly(text)
             }
         }
     }
