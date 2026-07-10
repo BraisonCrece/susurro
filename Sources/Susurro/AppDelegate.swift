@@ -186,6 +186,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch outcome {
         case .injected, .empty:
             break
+        case .injectedRaw(let error):
+            // The words landed (raw), so no alarming flash: the menu explains why the
+            // text arrived unpolished, for when the user goes looking.
+            showLastError("Refinado caído, se pegó la transcripción tal cual — \(Self.describe(error))")
         case .clipboardOnly:
             // The text survives on the clipboard; the checklist window shows exactly
             // which permission died and fixes it in one click.

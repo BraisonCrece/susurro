@@ -4,12 +4,14 @@ import AppKit
 enum DictationOutcome {
     /// Text landed in the focused app.
     case injected
+    /// The refiner failed, so the raw transcript landed instead — unpolished beats lost.
+    case injectedRaw(Error)
     /// Nothing worth pasting came back.
     case empty
     /// Text was ready but the synthetic ⌘V was impossible (Accessibility grant missing or
     /// silently invalidated by TCC); it was left on the clipboard instead.
     case clipboardOnly
-    /// Transcription or refinement failed.
+    /// Transcription failed: there is nothing to deliver.
     case failed(Error)
 }
 
@@ -18,29 +20,50 @@ enum DictationOutcome {
 struct DictationPipeline {
     let config: Config
 
+    /// The refiner rewrote a non-empty transcript into nothing — it ate the dictation.
+    struct EmptyRefinement: LocalizedError {
+        var errorDescription: String? { "el refinador devolvió una respuesta vacía" }
+    }
+
     func run(recording: Recording, context: String?, technical: Bool) async -> DictationOutcome {
         defer { recording.removeFile() }
+        let client = GroqClient(config: config)
+        let transcription: GroqClient.Transcription
         do {
-            let client = GroqClient(config: config)
-            let transcription = try await client.transcribe(fileURL: recording.fileURL)
-            let raw = transcription.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !raw.isEmpty else { return .empty }
+            transcription = try await client.transcribe(fileURL: recording.fileURL)
+        } catch {
+            return .failed(error)
+        }
+        let raw = transcription.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return .empty }
 
+        // Refinement is an enhancement, never a gate: once Whisper heard the words, text
+        // WILL land. If the refiner errors out or eats the transcript, the raw transcript
+        // is delivered as-is — the words are the user's, the polish is optional.
+        do {
             let clean = try await cleanupWithFallback(client: client, raw: raw, context: context,
                                                       technical: technical,
                                                       detectedLanguage: transcription.language)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !clean.isEmpty else { return .empty }
-
-            let text = Self.applyingLeadingSpace(to: clean, after: context)
-            return await MainActor.run {
-                switch TextInjector.inject(text) {
-                case .pasted: return DictationOutcome.injected
-                case .clipboardFallback: return DictationOutcome.clipboardOnly
-                }
-            }
+            guard !clean.isEmpty else { throw EmptyRefinement() }
+            return await deliver(clean, after: context, refinerFailure: nil)
         } catch {
-            return .failed(error)
+            NSLog("[Susurro] refiner failed, delivering raw transcript: %@",
+                  error.localizedDescription)
+            return await deliver(raw, after: context, refinerFailure: error)
+        }
+    }
+
+    private func deliver(_ text: String, after context: String?,
+                         refinerFailure: Error?) async -> DictationOutcome {
+        let text = Self.applyingLeadingSpace(to: text, after: context)
+        return await MainActor.run {
+            switch TextInjector.inject(text) {
+            case .pasted:
+                return refinerFailure.map(DictationOutcome.injectedRaw) ?? .injected
+            case .clipboardFallback:
+                return .clipboardOnly
+            }
         }
     }
 
